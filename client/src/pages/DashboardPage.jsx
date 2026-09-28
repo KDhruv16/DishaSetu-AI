@@ -97,16 +97,49 @@ export const DashboardPage = () => {
     return <LoadingSpinner fullScreen label="Loading your career readiness intelligence..." />;
   }
 
-  // Live calculated core metrics
+  // Live calculated core metrics strictly derived from real database models
   const primaryCareer = analysis?.careers?.[0];
-  const readinessScore = analysis?.readinessScore?.overall ?? profile?.readiness?.readinessScore ?? 0;
   const targetRole = primaryCareer?.role || profile?.career?.targetRole || profile?.targetRole || 'Full Stack Developer';
-  const skillMatchScore = primaryCareer?.matchPercentage ?? profile?.readiness?.skillMatchScore ?? 0;
-  const resumeScore = resumeAnalysis?.atsScore?.overall || 0;
-  const interviewScore =
-    interviewAnalysis?.completed && interviewAnalysis?.overallScore?.overall
-      ? interviewAnalysis.overallScore.overall
-      : (interviewAnalysis?.completed && interviewAnalysis?.scores?.overall ? interviewAnalysis.scores.overall : 0);
+
+  // 1. Resume ATS Score (Strictly real: null if user has not uploaded/scanned resume)
+  const resumeScore = (resumeAnalysis && typeof resumeAnalysis.atsScore?.overall === 'number' && resumeAnalysis.atsScore.overall > 0)
+    ? resumeAnalysis.atsScore.overall
+    : ((profile?.readiness && typeof profile.readiness.resumeScore === 'number' && profile.readiness.resumeScore > 0)
+      ? profile.readiness.resumeScore
+      : null);
+  const hasResume = resumeScore !== null;
+
+  // 2. Mock Interview Score (Strictly real: null if user has not completed mock interview)
+  const interviewScore = (interviewAnalysis?.completed && typeof interviewAnalysis.overallScore?.overall === 'number' && interviewAnalysis.overallScore.overall > 0)
+    ? interviewAnalysis.overallScore.overall
+    : ((interviewAnalysis?.completed && typeof interviewAnalysis.scores?.overall === 'number' && interviewAnalysis.scores.overall > 0)
+      ? interviewAnalysis.scores.overall
+      : ((profile?.readiness && typeof profile.readiness.interviewScore === 'number' && profile.readiness.interviewScore > 0)
+        ? profile.readiness.interviewScore
+        : null));
+  const hasInterview = interviewScore !== null;
+
+  // 3. Skill Assessment Score (Strictly real: null if user has not taken assessment)
+  const skillAssessmentScore = (profile?.readiness && typeof profile.readiness.skillAssessmentScore === 'number' && profile.readiness.skillAssessmentScore > 0)
+    ? profile.readiness.skillAssessmentScore
+    : null;
+  const hasAssessment = skillAssessmentScore !== null;
+
+  // 4. Skill Match Score (Derived strictly from real profile skills vs target role benchmark)
+  const skillMatchScore = typeof primaryCareer?.matchPercentage === 'number'
+    ? primaryCareer.matchPercentage
+    : (typeof profile?.readiness?.skillMatchScore === 'number' ? profile.readiness.skillMatchScore : null);
+
+  // 5. Career Readiness Score (Strictly real: only calculated when required evaluations exist, otherwise null/Pending)
+  const isReadinessEvaluated = hasResume && hasInterview && typeof analysis?.readinessScore?.overall === 'number' && analysis.readinessScore.overall > 0;
+  const readinessScore = isReadinessEvaluated
+    ? analysis.readinessScore.overall
+    : (user?.isDemo && profile?.readiness?.readinessScore ? profile.readiness.readinessScore : null);
+
+  // 6. Roadmap Metrics (Strictly real: 0 completed tasks for new users)
+  const roadmapCompletedTasks = roadmapData?.completedTasks || 0;
+  const roadmapTotalTasks = roadmapData?.totalTasks || 12;
+  const roadmapProgress = roadmapData?.overallProgress || (roadmapTotalTasks > 0 ? Math.round((roadmapCompletedTasks / roadmapTotalTasks) * 100) : 0);
 
   // Deterministic Next Best Step
   const nextBestStepObj = getDeterministicNextStep({
@@ -122,15 +155,17 @@ export const DashboardPage = () => {
     name: m.skill,
     priority: m.priority,
     reason: m.reason,
-  })) || profile?.readiness?.topSkillGaps || [
-    { name: 'Docker', priority: 'High', reason: 'Essential for modern containerized microservice deployments.' },
-    { name: 'Testing', priority: 'Medium', reason: 'High demand for test-driven codebases and QA pipelines.' },
-    { name: 'SQL', priority: 'Medium', reason: 'Standard relational querying competency across industry.' },
-  ];
+  })) || profile?.readiness?.topSkillGaps || [];
 
-  const roadmapProgress = roadmapData?.overallProgress || 0;
-  const roadmapCompletedTasks = roadmapData?.completedTasks || 0;
-  const roadmapTotalTasks = roadmapData?.totalTasks || 12;
+  const isProfileDone = Boolean(user?.isOnboarded && profile?.skills?.currentSkills?.length > 0);
+
+  // First pending evaluation route for CTA button
+  const getNextPendingRoute = () => {
+    if (!hasResume) return '/resume';
+    if (!hasAssessment) return '/skills';
+    if (!hasInterview) return '/interview';
+    return '/roadmap';
+  };
 
   return (
     <div className="min-h-screen bg-[#fafcff] flex flex-col">
@@ -145,95 +180,262 @@ export const DashboardPage = () => {
         )}
 
         {/* =========================================================
-            SECTION 1: HERO READINESS & "YOUR NEXT BEST STEP" (PRIORITY ACTION)
+            SECTION 1: HERO READINESS, EVALUATION CHECKLIST & NEXT BEST STEP
             ========================================================= */}
         <motion.div
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
         >
-          <Card className="p-6 sm:p-8 bg-gradient-to-br from-white via-white to-blue-50/40 border border-slate-200/90 shadow-premium">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-              {/* Left: Gauge Score */}
-              <div className="lg:col-span-5 flex flex-col items-center justify-center lg:items-start">
-                <GaugeChart
-                  score={readinessScore}
-                  max={100}
-                  label="CAREER READINESS SCORE"
-                  subtext={`Deterministic score synthesized across technical skills, projects, ATS resume, and interview readiness for ${targetRole}.`}
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navigate('/analytics')}
-                  className="mt-4 text-brand-700 bg-brand-50/80 hover:bg-brand-100 border-brand-200 text-xs font-semibold flex items-center justify-center gap-1.5 shadow-2xs"
-                >
-                  <BarChart3 className="w-4 h-4 text-brand-600" />
-                  View Career Analytics →
-                </Button>
-              </div>
-
-              {/* Right: "Your Next Best Step" (Strong Visual Hierarchy) */}
-              <div className="lg:col-span-7 bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950 text-white rounded-3xl p-6 sm:p-7 shadow-lg relative overflow-hidden border border-slate-800">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-brand-500/10 rounded-full blur-3xl pointer-events-none" />
-
-                <div className="flex items-center justify-between gap-2 mb-3 relative z-10">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
-                    <span className="text-xs font-extrabold uppercase tracking-widest text-amber-300">
-                      ★ Your Next Best Step
-                    </span>
+          <Card className="p-6 sm:p-7 bg-white border border-slate-200/90 shadow-premium">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+              
+              {/* Left Column: Gauge Score & Breakdown */}
+              <div className="lg:col-span-4 flex flex-col justify-between space-y-4">
+                <div className="flex items-start gap-4">
+                  <div className="shrink-0">
+                    <GaugeChart
+                      score={readinessScore}
+                      max={100}
+                      size={110}
+                      strokeWidth={10}
+                      showSubtext={false}
+                    />
                   </div>
-                  <Badge variant="brand" size="sm" className="bg-brand-500/20 text-brand-300 border-brand-400/30">
-                    {nextBestStepObj.badge || 'Highest Priority'}
-                  </Badge>
+                  <div className="space-y-1.5 pt-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-brand-700 bg-brand-50 border border-brand-200/60 px-2 py-0.5 rounded-md inline-block">
+                      Career Readiness Score
+                    </span>
+                    <h3 className="text-lg sm:text-xl font-bold font-display text-slate-900 leading-tight">
+                      {readinessScore !== null
+                        ? (readinessScore >= 75 ? 'Strong Employability Potential' : 'Developing Potential')
+                        : 'Evaluation Pending'}
+                    </h3>
+                  </div>
                 </div>
 
-                <h3 className="text-lg sm:text-2xl font-bold font-display text-white leading-snug relative z-10">
-                  "{nextBestStepObj.title}"
-                </h3>
-
-                <p className="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed relative z-10">
-                  {nextBestStepObj.description}
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  {readinessScore !== null
+                    ? `Based on your resume, skills, assessment performance and interview readiness, you are well on track for a ${targetRole} role.`
+                    : 'Complete your profile evaluations to get your Career Readiness Score and personalized career insights.'}
                 </p>
 
-                <div className="p-3 rounded-xl bg-white/10 border border-white/10 text-xs text-amber-200/90 mt-3 relative z-10 flex items-start gap-2">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-300 shrink-0 mt-0.5" />
-                  <span>
-                    <strong>Why this matters:</strong> {nextBestStepObj.reason}
-                  </span>
-                </div>
-
-                <div className="mt-5 flex flex-wrap items-center gap-3 relative z-10">
-                  <Button
-                    variant="primary"
-                    size="md"
-                    onClick={() => navigate(nextBestStepObj.route)}
-                    className="bg-brand-500 hover:bg-brand-400 text-slate-950 font-bold shadow-md group"
-                  >
-                    {nextBestStepObj.action}
-                    <ArrowRight className="w-4 h-4 ml-1.5 group-hover:translate-x-0.5 transition-transform" />
-                  </Button>
-
+                <div>
                   <Button
                     variant="outline"
-                    size="md"
-                    onClick={() => navigate('/assistant')}
-                    className="text-white bg-white/10 hover:bg-white/20 border-white/20"
+                    size="sm"
+                    onClick={() => navigate(readinessScore !== null ? '/analytics' : getNextPendingRoute())}
+                    className="text-slate-700 hover:text-brand-700 bg-slate-50 hover:bg-brand-50 border-slate-200 hover:border-brand-300 text-xs font-semibold flex items-center gap-1.5 shadow-2xs transition-all"
                   >
-                    <Bot className="w-4 h-4 mr-1.5 text-brand-300" />
-                    Ask AI Copilot
-                  </Button>
-
-                  <Button
-                    variant="ghost"
-                    size="md"
-                    onClick={() => navigate('/roadmap')}
-                    className="text-slate-300 hover:text-white"
-                  >
-                    Roadmap ({roadmapProgress}%)
+                    <span>{readinessScore !== null ? 'View Full Breakdown' : 'Continue Evaluation'}</span>
+                    <ArrowRight className="w-3.5 h-3.5 text-brand-600" />
                   </Button>
                 </div>
+              </div>
+
+              {/* Middle Column: Evaluation Checklist (Timeline) */}
+              <div className="lg:col-span-4 flex flex-col justify-center border-t lg:border-t-0 lg:border-l lg:border-r border-slate-200/80 pt-5 lg:pt-0 px-0 lg:px-5">
+                <div className="space-y-3.5">
+                  {/* Item 1: Profile */}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-xs ${isProfileDone ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                        {isProfileDone ? <CheckCircle2 className="w-4 h-4" /> : <Clock className="w-3.5 h-3.5" />}
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900">Profile</h4>
+                        <p className="text-[11px] text-slate-500">Education, skills, interests</p>
+                      </div>
+                    </div>
+                    {isProfileDone ? (
+                      <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2.5 py-0.5 rounded-full shrink-0">
+                        Completed
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-2.5 py-0.5 rounded-full shrink-0">
+                        Pending
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Connector */}
+                  <div className="w-px h-2.5 border-l-2 border-dashed border-slate-200 ml-3 -my-1" />
+
+                  {/* Item 2: Resume / ATS Analysis */}
+                  <div
+                    onClick={() => !hasResume && navigate('/resume')}
+                    className={`flex items-center justify-between gap-3 ${!hasResume ? 'cursor-pointer group' : ''}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-xs ${hasResume ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400 border border-slate-200'}`}>
+                        {hasResume ? <CheckCircle2 className="w-4 h-4" /> : <FileCheck className="w-3.5 h-3.5" />}
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900 group-hover:text-brand-600 transition-colors">Resume / ATS Analysis</h4>
+                        <p className="text-[11px] text-slate-500">{hasResume ? 'Resume quality & keyword match' : 'Upload your resume for AI analysis'}</p>
+                      </div>
+                    </div>
+                    {hasResume ? (
+                      <span className="text-[11px] font-bold text-brand-700 bg-brand-50 border border-brand-200/80 px-2.5 py-0.5 rounded-full shrink-0">
+                        {resumeScore}/100
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200/80 px-2.5 py-0.5 rounded-full shrink-0 group-hover:bg-amber-100 transition-colors">
+                        Pending
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Connector */}
+                  <div className="w-px h-2.5 border-l-2 border-dashed border-slate-200 ml-3 -my-1" />
+
+                  {/* Item 3: Skill Assessment */}
+                  <div
+                    onClick={() => !hasAssessment && navigate('/skills')}
+                    className={`flex items-center justify-between gap-3 ${!hasAssessment ? 'cursor-pointer group' : ''}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-xs ${hasAssessment ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400 border border-slate-200'}`}>
+                        {hasAssessment ? <CheckCircle2 className="w-4 h-4" /> : <Zap className="w-3.5 h-3.5" />}
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900 group-hover:text-brand-600 transition-colors">Skill Assessment</h4>
+                        <p className="text-[11px] text-slate-500">{hasAssessment ? 'Technical knowledge & problem solving' : 'Take a role-based assessment'}</p>
+                      </div>
+                    </div>
+                    {hasAssessment ? (
+                      <span className="text-[11px] font-bold text-brand-700 bg-brand-50 border border-brand-200/80 px-2.5 py-0.5 rounded-full shrink-0">
+                        {skillAssessmentScore}/100
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200/80 px-2.5 py-0.5 rounded-full shrink-0 group-hover:bg-amber-100 transition-colors">
+                        Pending
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Connector */}
+                  <div className="w-px h-2.5 border-l-2 border-dashed border-slate-200 ml-3 -my-1" />
+
+                  {/* Item 4: Mock Interview */}
+                  <div
+                    onClick={() => !hasInterview && navigate('/interview')}
+                    className={`flex items-center justify-between gap-3 ${!hasInterview ? 'cursor-pointer group' : ''}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-xs ${hasInterview ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400 border border-slate-200'}`}>
+                        {hasInterview ? <CheckCircle2 className="w-4 h-4" /> : <MessageSquareCode className="w-3.5 h-3.5" />}
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900 group-hover:text-brand-600 transition-colors">Mock Interview</h4>
+                        <p className="text-[11px] text-slate-500">{hasInterview ? 'Communication & interview readiness' : 'Give a mock interview with AI'}</p>
+                      </div>
+                    </div>
+                    {hasInterview ? (
+                      <span className="text-[11px] font-bold text-brand-700 bg-brand-50 border border-brand-200/80 px-2.5 py-0.5 rounded-full shrink-0">
+                        {interviewScore}/100
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200/80 px-2.5 py-0.5 rounded-full shrink-0 group-hover:bg-amber-100 transition-colors">
+                        Pending
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Next Best Step or Complete Your Evaluation */}
+              <div className="lg:col-span-4 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl p-5 shadow-md relative overflow-hidden border border-slate-800 flex flex-col justify-between">
+                <div className="absolute top-0 right-0 w-48 h-48 bg-brand-500/15 rounded-full blur-2xl pointer-events-none" />
+
+                {readinessScore !== null ? (
+                  <>
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-2 relative z-10">
+                        <span className="text-xs font-extrabold uppercase tracking-wider text-amber-300 flex items-center gap-1">
+                          ★ YOUR NEXT BEST STEP
+                        </span>
+                      </div>
+
+                      <h3 className="text-base sm:text-lg font-bold font-display text-white leading-snug relative z-10">
+                        {nextBestStepObj.title}
+                      </h3>
+
+                      <p className="text-xs text-slate-300 mt-2 leading-relaxed relative z-10">
+                        {nextBestStepObj.description || nextBestStepObj.reason}
+                      </p>
+                    </div>
+
+                    <div className="mt-4 relative z-10">
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => navigate(nextBestStepObj.route || '/roadmap')}
+                        className="w-full bg-brand-500 hover:bg-brand-400 text-slate-950 font-bold shadow-sm flex items-center justify-center gap-1.5"
+                      >
+                        <span>{nextBestStepObj.action || 'Continue Roadmap'}</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-2 relative z-10">
+                        <span className="text-xs font-extrabold uppercase tracking-wider text-amber-300 flex items-center gap-1">
+                          ★ Complete Your Evaluation
+                        </span>
+                      </div>
+
+                      <h3 className="text-base font-bold font-display text-white leading-snug relative z-10">
+                        Unlock Your Career Potential
+                      </h3>
+
+                      <p className="text-[11px] text-slate-300 mt-1 leading-relaxed relative z-10">
+                        Complete your AI-powered evaluations to generate your deterministic score:
+                      </p>
+
+                      <div className="space-y-1.5 mt-3 relative z-10 text-[11px]">
+                        <div className="flex items-center gap-2 text-slate-300">
+                          <span className={hasResume ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
+                            {hasResume ? '✓' : '○'}
+                          </span>
+                          <span>AI Resume Analysis (ATS)</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-slate-300">
+                          <span className={hasAssessment ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
+                            {hasAssessment ? '✓' : '○'}
+                          </span>
+                          <span>Role-based Skill Assessment</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-slate-300">
+                          <span className={hasInterview ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
+                            {hasInterview ? '✓' : '○'}
+                          </span>
+                          <span>AI Mock Interview</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-slate-300">
+                          <span className={roadmapCompletedTasks > 0 ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
+                            {roadmapCompletedTasks > 0 ? '✓' : '○'}
+                          </span>
+                          <span>Personalized Career Roadmap</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 relative z-10">
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => navigate(getNextPendingRoute())}
+                        className="w-full bg-brand-500 hover:bg-brand-400 text-slate-950 font-bold shadow-sm flex items-center justify-center gap-1.5"
+                      >
+                        <span>Start Evaluation</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </Card>
@@ -249,7 +451,7 @@ export const DashboardPage = () => {
               <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
                 Target Role
               </span>
-              <div className="w-8 h-8 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
                 <Target className="w-4 h-4" />
               </div>
             </div>
@@ -274,14 +476,16 @@ export const DashboardPage = () => {
             </div>
             <div className="flex items-baseline gap-1">
               <h4 className="text-2xl font-extrabold font-display text-slate-900">
-                {skillMatchScore}%
+                {skillMatchScore !== null ? `${skillMatchScore}%` : '—'}
               </h4>
-              <span className="text-xs text-slate-400">benchmark</span>
+              {skillMatchScore === null && (
+                <span className="text-[11px] text-slate-400 ml-1">Complete assessment</span>
+              )}
             </div>
             <div className="w-full bg-slate-100 rounded-full h-1.5 mt-3 overflow-hidden">
               <div
-                className="bg-amber-500 h-1.5 rounded-full transition-all duration-500"
-                style={{ width: `${skillMatchScore}%` }}
+                className="bg-blue-600 h-1.5 rounded-full transition-all duration-500"
+                style={{ width: `${skillMatchScore || 0}%` }}
               />
             </div>
           </Card>
@@ -292,25 +496,27 @@ export const DashboardPage = () => {
               <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
                 Resume ATS
               </span>
-              <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
                 <FileCheck className="w-4 h-4" />
               </div>
             </div>
             <div className="flex items-baseline gap-1">
               <h4 className="text-2xl font-extrabold font-display text-slate-900">
-                {resumeScore > 0 ? `${resumeScore}%` : 'Not Scanned'}
+                {hasResume ? `${resumeScore}%` : '—'}
               </h4>
-              {resumeScore > 0 && <span className="text-xs text-slate-400">ATS score</span>}
+              {!hasResume && (
+                <span className="text-[11px] text-slate-400 ml-1">Upload resume</span>
+              )}
             </div>
             <div className="w-full bg-slate-100 rounded-full h-1.5 mt-3 overflow-hidden">
               <div
-                className="bg-indigo-500 h-1.5 rounded-full"
-                style={{ width: `${resumeScore}%` }}
+                className="bg-indigo-600 h-1.5 rounded-full transition-all duration-500"
+                style={{ width: `${resumeScore || 0}%` }}
               />
             </div>
           </Card>
 
-          {/* Card 4: Interview Readiness */}
+          {/* Card 4: Mock Interview */}
           <Card hoverEffect onClick={() => navigate('/interview')} className="p-5 border border-slate-200/80 bg-white">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -321,20 +527,22 @@ export const DashboardPage = () => {
               </div>
             </div>
             <div className="flex items-baseline gap-1">
-              <h4 className="text-2xl font-extrabold font-display text-slate-900">
-                {interviewScore > 0 ? `${interviewScore}%` : 'Practice'}
+              <h4 className={`font-extrabold font-display text-slate-900 ${hasInterview ? 'text-2xl' : 'text-lg'}`}>
+                {hasInterview ? `${interviewScore}%` : 'Pending'}
               </h4>
-              {interviewScore > 0 && <span className="text-xs text-slate-400">readiness</span>}
+              {!hasInterview && (
+                <span className="text-[11px] text-slate-400 ml-1">Start interview</span>
+              )}
             </div>
             <div className="w-full bg-slate-100 rounded-full h-1.5 mt-3 overflow-hidden">
               <div
-                className="bg-emerald-500 h-1.5 rounded-full"
-                style={{ width: `${interviewScore || 40}%` }}
+                className="bg-emerald-500 h-1.5 rounded-full transition-all duration-500"
+                style={{ width: `${interviewScore || 0}%` }}
               />
             </div>
           </Card>
 
-          {/* Card 5: 4-Week Roadmap Sprint Progress */}
+          {/* Card 5: Roadmap Sprint */}
           <Card hoverEffect onClick={() => navigate('/roadmap')} className="p-5 border border-slate-200/80 bg-white">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -346,15 +554,12 @@ export const DashboardPage = () => {
             </div>
             <div className="flex items-baseline gap-1">
               <h4 className="text-2xl font-extrabold font-display text-slate-900">
-                {roadmapProgress}%
+                {roadmapCompletedTasks} / {roadmapTotalTasks} tasks
               </h4>
-              <span className="text-xs text-slate-400">
-                {roadmapCompletedTasks}/{roadmapTotalTasks} tasks
-              </span>
             </div>
             <div className="w-full bg-slate-100 rounded-full h-1.5 mt-3 overflow-hidden">
               <div
-                className="bg-purple-600 h-1.5 rounded-full transition-all duration-500"
+                className="bg-amber-500 h-1.5 rounded-full transition-all duration-500"
                 style={{ width: `${roadmapProgress}%` }}
               />
             </div>

@@ -1,23 +1,46 @@
-/**
- * Roadmap Service for DishaSetu
- * Generates deterministic 4-week structured sprint based on student profile and career analysis skill gaps.
- */
+import { normalizeSkillName, ROLE_SKILL_BENCHMARKS } from '../utils/skillNormalization.js';
 
 export const generatePersonalizedRoadmap = (profile, careerAnalysis) => {
   const targetRole =
+    profile?.career?.targetRole ||
     careerAnalysis?.careers?.[0]?.role ||
     profile?.targetRole ||
-    profile?.career?.targetRole ||
     'Full Stack Developer';
 
-  // Extract missing skills with priority
+  const masteredSkills = (profile?.skills?.currentSkills || []).map((s) => normalizeSkillName(s).toLowerCase());
+  const readySkills = (profile?.skills?.readyForEvaluationSkills || []).map((s) => normalizeSkillName(s).toLowerCase());
+
+  // Extract missing skills with priority from career analysis, profile gaps, or role benchmarks
   const rawMissingSkills = careerAnalysis?.careers?.[0]?.missingSkills || [];
-  const missingSkills = rawMissingSkills.length > 0
-    ? rawMissingSkills
+  let allGaps = [];
+  if (rawMissingSkills.length > 0) {
+    allGaps = rawMissingSkills;
+  } else if (profile?.readiness?.topSkillGaps?.length > 0) {
+    allGaps = profile.readiness.topSkillGaps.map((g) => ({
+      skill: g.name || g.skill,
+      priority: g.priority || 'High',
+      reason: g.reason || `Crucial competency for ${targetRole}.`,
+    }));
+  } else {
+    const benchmarks = ROLE_SKILL_BENCHMARKS[targetRole] || ROLE_SKILL_BENCHMARKS['Full Stack Developer'] || [];
+    allGaps = benchmarks.map((skill, idx) => ({
+      skill,
+      priority: idx === 0 ? 'High' : 'Medium',
+      reason: `Fundamental requirement for ${targetRole} workflows.`,
+    }));
+  }
+
+  // Filter out skills the user has ALREADY mastered or completed in prior sprints
+  const activeMissingSkills = allGaps.filter(
+    (m) => m.skill && !masteredSkills.includes(m.skill.toLowerCase()) && !readySkills.includes(m.skill.toLowerCase())
+  );
+
+  const missingSkills = activeMissingSkills.length > 0
+    ? activeMissingSkills
     : [
-        { skill: 'Docker', priority: 'High', reason: 'Essential for containerization and cloud deployments.' },
-        { skill: 'Testing', priority: 'Medium', reason: 'Critical for robust, production-ready codebases.' },
-        { skill: 'SQL', priority: 'Medium', reason: 'Standard relational querying competency.' },
+        { skill: 'System Architecture', priority: 'High', reason: `High-level design patterns and microservice scalability for ${targetRole}.` },
+        { skill: 'Performance Optimization', priority: 'Medium', reason: `Benchmarking, query profiling, and latency reduction in production.` },
+        { skill: 'Production Deployment & Security', priority: 'Medium', reason: `Security best practices, auth hardening, and cloud monitoring.` },
       ];
 
   // Pick top 3 gap skills for the roadmap weeks

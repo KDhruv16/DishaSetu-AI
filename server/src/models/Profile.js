@@ -29,6 +29,8 @@ const profileSchema = new mongoose.Schema(
     // Step 4: Skills & Experience
     skills: {
       currentSkills: [{ type: String, trim: true }],
+      learningSkills: [{ type: String, trim: true }],
+      readyForEvaluationSkills: [{ type: String, trim: true }],
       projects: [{ type: String, trim: true }],
       internships: [{ type: String, trim: true }],
       certifications: [{ type: String, trim: true }],

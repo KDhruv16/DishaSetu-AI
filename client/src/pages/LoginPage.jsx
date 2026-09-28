@@ -12,7 +12,7 @@ export const LoginPage = () => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const { login } = useAuth();
+  const { login, demoLogin } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -36,6 +36,23 @@ export const LoginPage = () => {
       }
     } else {
       setError(res.message);
+    }
+  };
+
+  const handleDemoLogin = async () => {
+    setError('');
+    setIsLoading(true);
+    try {
+      const res = await demoLogin();
+      if (res?.success) {
+        navigate('/dashboard');
+      } else {
+        setError(res?.message || 'Failed to load demo profile.');
+      }
+    } catch (err) {
+      setError(err?.message || 'An unexpected error occurred during demo login.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -118,16 +135,7 @@ export const LoginPage = () => {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={async () => {
-                  setIsLoading(true);
-                  const res = await demoLogin();
-                  setIsLoading(false);
-                  if (res.success) {
-                    navigate('/dashboard');
-                  } else {
-                    setError(res.message);
-                  }
-                }}
+                onClick={handleDemoLogin}
                 isLoading={isLoading}
                 className="w-full bg-white text-amber-900 border-amber-300 hover:bg-amber-100 font-bold text-xs shadow-2xs"
               >

@@ -16,13 +16,15 @@ import { Card } from '../components/common/Card';
 import { Badge } from '../components/common/Badge';
 import { Button } from '../components/common/Button';
 import { AiLoadingAnimation } from '../components/common/AiLoadingAnimation';
+import { normalizeSkillName, ROLE_SKILL_BENCHMARKS } from '../utils/skillNormalization';
 import api from '../utils/api';
 
 export const SkillGapPage = () => {
-  const { profile } = useAuth();
+  const { profile: authProfile } = useAuth();
   const navigate = useNavigate();
 
   const [analysis, setAnalysis] = useState(null);
+  const [userProfile, setUserProfile] = useState(authProfile || null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -30,13 +32,19 @@ export const SkillGapPage = () => {
     const fetchAnalysis = async () => {
       try {
         setLoading(true);
-        const res = await api.get('/ai/career-analysis');
-        if (res.data?.success && res.data.analysis) {
-          setAnalysis(res.data.analysis);
-        } else if (res.data?.incomplete) {
+        const [analysisRes, profileRes] = await Promise.allSettled([
+          api.get('/ai/career-analysis'),
+          api.get('/profile'),
+        ]);
+
+        if (analysisRes.status === 'fulfilled' && analysisRes.value.data?.success && analysisRes.value.data.analysis) {
+          setAnalysis(analysisRes.value.data.analysis);
+        } else if (analysisRes.status === 'fulfilled' && analysisRes.value.data?.incomplete) {
           navigate('/onboarding');
-        } else {
-          setError("Couldn't load skill gap analysis.");
+        }
+
+        if (profileRes.status === 'fulfilled' && profileRes.value.data?.success && profileRes.value.data.profile) {
+          setUserProfile(profileRes.value.data.profile);
         }
       } catch (err) {
         console.error('Error in SkillGapPage:', err);
@@ -49,17 +57,46 @@ export const SkillGapPage = () => {
     fetchAnalysis();
   }, [navigate]);
 
+  const activeProfile = userProfile || authProfile;
   const primaryCareer = analysis?.careers?.[0];
-  const targetRole = primaryCareer?.role || profile?.career?.targetRole || 'Full Stack Developer';
-  const requiredSkills = primaryCareer?.requiredSkills || ['React', 'Node.js', 'MongoDB', 'JavaScript', 'SQL', 'Docker', 'Testing'];
-  const missingSkills = primaryCareer?.missingSkills || [
+  const targetRole = primaryCareer?.role || activeProfile?.career?.targetRole || activeProfile?.targetRole || 'Full Stack Developer';
+  const requiredSkills = primaryCareer?.requiredSkills || ROLE_SKILL_BENCHMARKS[targetRole] || ['React', 'Node.js', 'MongoDB', 'JavaScript', 'SQL', 'Docker', 'Testing'];
+
+  const masteredSkills = (activeProfile?.skills?.currentSkills || []).map((s) => normalizeSkillName(s));
+  const normalizedMastered = masteredSkills.map((s) => s.toLowerCase());
+
+  const readySkills = (activeProfile?.skills?.readyForEvaluationSkills || []).map((s) => normalizeSkillName(s));
+  const normalizedReady = readySkills.map((s) => s.toLowerCase());
+
+  const learningSkills = (activeProfile?.skills?.learningSkills || []).map((s) => normalizeSkillName(s));
+  const normalizedLearning = learningSkills.map((s) => s.toLowerCase());
+
+  // Filter missing skills from career analysis or target role benchmarks:
+  // Exclude skills that are ALREADY mastered or completed/ready for evaluation
+  const rawMissingSkills = primaryCareer?.missingSkills || [
     { skill: 'Docker', priority: 'High', reason: 'Essential for containerizing microservices and deployments.' },
     { skill: 'Testing', priority: 'Medium', reason: 'Required for writing reliable test suites in production.' },
     { skill: 'SQL', priority: 'Medium', reason: 'Fundamental for relational database queries and reporting.' },
   ];
 
-  const userSkills = (profile?.skills?.currentSkills || []).map((s) => s.trim());
-  const normalizedUserSkills = userSkills.map((s) => s.toLowerCase());
+  const activePriorityGaps = rawMissingSkills.filter(
+    (m) => m.skill && !normalizedMastered.includes(normalizeSkillName(m.skill).toLowerCase()) && !normalizedReady.includes(normalizeSkillName(m.skill).toLowerCase())
+  );
+
+  const getSkillStatus = (skill) => {
+    const sCanonical = normalizeSkillName(skill);
+    const sLower = sCanonical.toLowerCase();
+    if (normalizedMastered.includes(sLower)) {
+      return { label: 'Mastered ✓', variant: 'success', color: 'emerald', icon: 'check' };
+    }
+    if (normalizedReady.includes(sLower)) {
+      return { label: 'Ready for Re-evaluation 🟡', variant: 'warning', color: 'amber', icon: 'clock' };
+    }
+    if (normalizedLearning.includes(sLower)) {
+      return { label: 'Learning 🔵', variant: 'info', color: 'indigo', icon: 'zap' };
+    }
+    return { label: 'Skill Gap !', variant: 'danger', color: 'rose', icon: 'alert' };
+  };
 
   if (loading) {
     return (
@@ -101,24 +138,35 @@ export const SkillGapPage = () => {
                   </h3>
                 </div>
                 <span className="text-xs font-semibold text-slate-500">
-                  {requiredSkills.filter((r) => normalizedUserSkills.includes(r.toLowerCase())).length} of {requiredSkills.length} Mastered
+                  {requiredSkills.filter((r) => normalizedMastered.includes(r.toLowerCase())).length} of {requiredSkills.length} Mastered
                 </span>
               </div>
 
               <div className="divide-y divide-slate-100 mt-3">
                 {requiredSkills.map((skill, idx) => {
-                  const isAcquired = normalizedUserSkills.includes(skill.toLowerCase());
+                  const status = getSkillStatus(skill);
                   return (
                     <div
                       key={idx}
                       className="py-3 flex items-center justify-between hover:bg-slate-50/60 px-2 rounded-lg transition-colors"
                     >
                       <div className="flex items-center gap-3">
-                        {isAcquired ? (
+                        {status.icon === 'check' && (
                           <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-bold shrink-0">
                             <Check className="w-3.5 h-3.5" />
                           </div>
-                        ) : (
+                        )}
+                        {status.icon === 'clock' && (
+                          <div className="w-6 h-6 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-xs font-bold shrink-0">
+                            🟡
+                          </div>
+                        )}
+                        {status.icon === 'zap' && (
+                          <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold shrink-0">
+                            <Zap className="w-3.5 h-3.5" />
+                          </div>
+                        )}
+                        {status.icon === 'alert' && (
                           <div className="w-6 h-6 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center text-xs font-bold shrink-0">
                             !
                           </div>
@@ -129,10 +177,10 @@ export const SkillGapPage = () => {
                       </div>
 
                       <Badge
-                        variant={isAcquired ? 'success' : 'danger'}
+                        variant={status.variant}
                         size="sm"
                       >
-                        {isAcquired ? 'Mastered ✓' : 'Skill Gap !'}
+                        {status.label}
                       </Badge>
                     </div>
                   );
@@ -141,13 +189,13 @@ export const SkillGapPage = () => {
             </Card>
 
             {/* Your other acquired profile skills */}
-            {userSkills.length > 0 && (
+            {masteredSkills.length > 0 && (
               <Card className="p-5 border border-slate-200/80 bg-slate-50/50">
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-400 block mb-2">
                   Other Verified Skills in Your Profile:
                 </span>
                 <div className="flex flex-wrap gap-1.5">
-                  {userSkills.map((s, i) => (
+                  {masteredSkills.map((s, i) => (
                     <span
                       key={i}
                       className="text-xs bg-white border border-slate-200 px-2.5 py-1 rounded-lg text-slate-700 font-medium"
@@ -176,30 +224,32 @@ export const SkillGapPage = () => {
               </p>
 
               <div className="space-y-4">
-                {missingSkills.length === 0 ? (
+                {activePriorityGaps.length === 0 ? (
                   <div className="p-6 rounded-2xl bg-emerald-50/70 border border-emerald-200 text-center space-y-3">
                     <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto">
                       <Check className="w-5 h-5 stroke-[2.5]" />
                     </div>
                     <div>
                       <h4 className="text-sm font-bold text-emerald-950">
-                        Zero Skill Gaps Detected!
+                        {readySkills.length > 0 ? 'Ready for Validation!' : 'Zero Skill Gaps Detected!'}
                       </h4>
                       <p className="text-xs text-emerald-800 mt-1 leading-relaxed">
-                        You have mastered all core competencies required for <strong>{targetRole}</strong>.
+                        {readySkills.length > 0
+                          ? `You completed roadmap tasks for ${readySkills.join(', ')}. Validate your mastery in a Mock Interview!`
+                          : `You have mastered all core competencies required for ${targetRole}.`}
                       </p>
                     </div>
                     <Button
                       variant="primary"
                       size="sm"
                       onClick={() => navigate('/interview')}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
                     >
                       Take Mock Interview →
                     </Button>
                   </div>
                 ) : (
-                  missingSkills.map((gap, idx) => (
+                  activePriorityGaps.map((gap, idx) => (
                     <div
                       key={idx}
                       className="p-4 rounded-xl bg-white border border-slate-200/80 shadow-xs space-y-1.5"
@@ -239,7 +289,6 @@ export const SkillGapPage = () => {
                 )}
               </div>
 
-
               <div className="mt-6 pt-4 border-t border-slate-100 flex flex-col sm:flex-row gap-2">
                 <Button
                   variant="primary"
@@ -266,3 +315,4 @@ export const SkillGapPage = () => {
     </div>
   );
 };
+

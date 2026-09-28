@@ -23,6 +23,21 @@ export const getDeterministicNextStep = ({
     profile?.targetRole ||
     'Full Stack Developer';
 
+  // Priority 1: If roadmap is 100% completed and interview is pending / needs validation
+  const isRoadmapDone = roadmapData && roadmapData.totalTasks > 0 && roadmapData.completedTasks >= roadmapData.totalTasks;
+  const isInterviewDone = Boolean(interviewAnalysis?.completed && (interviewAnalysis?.overallScore?.overall || 0) >= 60);
+
+  if (isRoadmapDone && !isInterviewDone) {
+    return {
+      title: 'Validate Your Progress',
+      description: 'All roadmap milestones complete! Validate your newly acquired skills with an AI Mock Interview.',
+      reason: 'Simulated interview evaluation verifies your newly learned competencies and updates your Career Readiness Score.',
+      action: 'Take Mock Interview →',
+      route: '/interview',
+      badge: 'Validate Skills',
+    };
+  }
+
   // Priority 1: High-priority incomplete roadmap task
   if (roadmapData && Array.isArray(roadmapData.weeks) && roadmapData.weeks.length > 0) {
     for (const week of roadmapData.weeks) {

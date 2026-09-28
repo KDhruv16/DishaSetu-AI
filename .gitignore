@@ -10,7 +10,7 @@ server/.env
 client/.env
 
 # Production build outputs
-dist/
+dist/   
 build/
 client/dist/
 
@@ -23,3 +23,4 @@ yarn-error.log*
 # OS Files
 .DS_Store
 Thumbs.db
+

@@ -1,7 +1,10 @@
 import CareerAnalysis from '../models/CareerAnalysis.js';
 import Profile from '../models/Profile.js';
+import ResumeAnalysis from '../models/ResumeAnalysis.js';
+import Interview from '../models/Interview.js';
 import { generateCareerAnalysis } from '../services/aiService.js';
 import { calculateReadinessScore } from '../services/readinessService.js';
+import { normalizeSkillName, ROLE_SKILL_BENCHMARKS } from '../utils/skillNormalization.js';
 
 // Helper to validate profile completeness
 const isProfileComplete = (profile) => {
@@ -30,6 +33,34 @@ export const getCareerAnalysis = async (req, res) => {
     let analysis = await CareerAnalysis.findOne({ userId: req.user._id });
 
     if (analysis) {
+      // Synchronize career missing skills with latest live profile currentSkills
+      const currentSkillsLower = (profile.skills?.currentSkills || []).map((s) => normalizeSkillName(s).toLowerCase());
+      let changed = false;
+
+      if (analysis.careers && analysis.careers.length > 0) {
+        analysis.careers.forEach((career) => {
+          const benchmarkSkills = ROLE_SKILL_BENCHMARKS[career.role] || career.requiredSkills || [];
+          const matched = benchmarkSkills.filter((b) => currentSkillsLower.includes(normalizeSkillName(b).toLowerCase()));
+          const remaining = benchmarkSkills.filter((b) => !currentSkillsLower.includes(normalizeSkillName(b).toLowerCase()));
+
+          const newMatchPct = benchmarkSkills.length > 0
+            ? Math.round((matched.length / benchmarkSkills.length) * 100)
+            : career.matchPercentage;
+
+          career.matchPercentage = newMatchPct;
+          career.missingSkills = remaining.map((skill, idx) => ({
+            skill: normalizeSkillName(skill),
+            priority: idx === 0 ? 'High' : 'Medium',
+            reason: `Important for modern ${career.role} development and industry standard practices.`,
+          }));
+          changed = true;
+        });
+      }
+
+      if (changed) {
+        await analysis.save();
+      }
+
       return res.status(200).json({
         success: true,
         analysis,
@@ -38,7 +69,15 @@ export const getCareerAnalysis = async (req, res) => {
 
     // If none exists, generate the initial analysis
     const aiResult = await generateCareerAnalysis(profile);
-    const readiness = calculateReadinessScore(profile, aiResult);
+    const resumeDoc = await ResumeAnalysis.findOne({ userId: req.user._id });
+    const interviewDoc = await Interview.findOne({ userId: req.user._id, completed: true });
+
+    const readiness = calculateReadinessScore(
+      profile,
+      aiResult,
+      interviewDoc?.overallScore?.overall || interviewDoc?.scores?.overall || null,
+      resumeDoc?.atsScore?.overall || null
+    );
 
     analysis = await CareerAnalysis.create({
       userId: req.user._id,
@@ -50,10 +89,10 @@ export const getCareerAnalysis = async (req, res) => {
     // Sync to Profile model for quick overview
     if (profile.readiness) {
       profile.readiness.readinessScore = readiness.overall;
-      profile.readiness.skillMatchScore = aiResult.careers[0]?.matchPercentage || 82;
+      profile.readiness.skillMatchScore = aiResult.careers[0]?.matchPercentage || null;
       profile.readiness.nextBestStep = aiResult.careers[0]?.nextStep || profile.readiness.nextBestStep;
       profile.readiness.topSkillGaps = (aiResult.careers[0]?.missingSkills || []).map((m) => ({
-        name: m.skill,
+        name: normalizeSkillName(m.skill),
         priority: m.priority,
         reason: m.reason,
       }));
@@ -90,26 +129,39 @@ export const refreshCareerAnalysis = async (req, res) => {
 
     // Generate fresh AI analysis
     const aiResult = await generateCareerAnalysis(profile);
-    const readiness = calculateReadinessScore(profile, aiResult);
+    const resumeDoc = await ResumeAnalysis.findOne({ userId: req.user._id });
+    const interviewDoc = await Interview.findOne({ userId: req.user._id, completed: true });
 
-    // Save or update in MongoDB
-    const analysis = await CareerAnalysis.findOneAndUpdate(
-      { userId: req.user._id },
-      {
+    const readiness = calculateReadinessScore(
+      profile,
+      aiResult,
+      interviewDoc?.overallScore?.overall || interviewDoc?.scores?.overall || null,
+      resumeDoc?.atsScore?.overall || null
+    );
+
+    let analysis = await CareerAnalysis.findOne({ userId: req.user._id });
+
+    if (analysis) {
+      analysis.careers = aiResult.careers;
+      analysis.readinessScore = readiness;
+      analysis.generatedAt = new Date();
+      await analysis.save();
+    } else {
+      analysis = await CareerAnalysis.create({
+        userId: req.user._id,
         careers: aiResult.careers,
         readinessScore: readiness,
         generatedAt: new Date(),
-      },
-      { new: true, upsert: true, runValidators: true }
-    );
+      });
+    }
 
     // Sync to Profile model
     if (profile.readiness) {
       profile.readiness.readinessScore = readiness.overall;
-      profile.readiness.skillMatchScore = aiResult.careers[0]?.matchPercentage || 82;
+      profile.readiness.skillMatchScore = aiResult.careers[0]?.matchPercentage || null;
       profile.readiness.nextBestStep = aiResult.careers[0]?.nextStep || profile.readiness.nextBestStep;
       profile.readiness.topSkillGaps = (aiResult.careers[0]?.missingSkills || []).map((m) => ({
-        name: m.skill,
+        name: normalizeSkillName(m.skill),
         priority: m.priority,
         reason: m.reason,
       }));
@@ -118,14 +170,14 @@ export const refreshCareerAnalysis = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Career analysis refreshed successfully',
+      message: 'Career analysis refreshed successfully.',
       analysis,
     });
   } catch (error) {
     console.error('Error refreshing career analysis:', error);
     return res.status(500).json({
       success: false,
-      message: "Career analysis couldn't be completed right now. Please try again.",
+      message: "Career analysis couldn't be refreshed right now. Please try again.",
     });
   }
 };

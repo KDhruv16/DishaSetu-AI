@@ -34,6 +34,8 @@ export const InterviewPage = () => {
   const [starting, setStarting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [evalError, setEvalError] = useState(false);
+  const [evalErrorMessage, setEvalErrorMessage] = useState('');
 
   // Setup Form State
   const defaultRole = profile?.career?.targetRole || 'Full Stack Developer';
@@ -75,6 +77,7 @@ export const InterviewPage = () => {
     try {
       setStarting(true);
       setError(null);
+      setEvalError(false);
 
       const res = await api.post('/interview/start', {
         role: selectedRole,
@@ -100,7 +103,7 @@ export const InterviewPage = () => {
 
   // Submit Answer
   const handleSubmitAnswer = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     if (!currentAnswer.trim()) {
       setError('Please type your answer before submitting.');
       return;
@@ -109,6 +112,7 @@ export const InterviewPage = () => {
     try {
       setSubmitting(true);
       setError(null);
+      setEvalError(false);
 
       const question = interview.questions[currentQuestionIdx];
 
@@ -120,15 +124,23 @@ export const InterviewPage = () => {
       if (res.data?.success && res.data.interview) {
         setInterview(res.data.interview);
         setCurrentEval(res.data.currentEvaluation);
+        setEvalError(false);
       } else {
-        setError('Failed to evaluate answer. Please try again.');
+        setEvalError(true);
+        setEvalErrorMessage(res.data?.message || 'AI Evaluation Unavailable. Please try again.');
       }
     } catch (err) {
       console.error('Submit answer error:', err);
-      setError('Something went wrong while evaluating your answer. Please try again.');
+      setEvalError(true);
+      setEvalErrorMessage(err.response?.data?.message || 'AI Evaluation Unavailable. Please try again.');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // Retry Evaluation (re-uses existing question and same candidate answer)
+  const handleRetryEvaluation = () => {
+    handleSubmitAnswer();
   };
 
   // Move to Next Question
@@ -136,6 +148,7 @@ export const InterviewPage = () => {
     setCurrentAnswer('');
     setCurrentEval(null);
     setError(null);
+    setEvalError(false);
     setCurrentQuestionIdx((prev) => prev + 1);
   };
 
@@ -146,6 +159,7 @@ export const InterviewPage = () => {
     setCurrentAnswer('');
     setCurrentQuestionIdx(0);
     setError(null);
+    setEvalError(false);
   };
 
   if (loadingLatest) {
@@ -319,6 +333,31 @@ export const InterviewPage = () => {
                 </div>
               )}
 
+              {/* AI Evaluation Failure / Retry Box */}
+              {evalError && !currentEval && (
+                <div className="p-4 rounded-xl bg-rose-50 border border-rose-200/90 space-y-3">
+                  <div className="flex items-center gap-2.5 text-rose-700">
+                    <AlertCircle className="w-5 h-5 shrink-0 text-rose-600" />
+                    <div>
+                      <p className="font-bold text-sm text-rose-900">AI Evaluation Unavailable</p>
+                      <p className="text-xs text-rose-600 font-medium">Please try again.</p>
+                    </div>
+                  </div>
+                  <div className="flex justify-end pt-1">
+                    <Button
+                      type="button"
+                      variant="danger"
+                      size="sm"
+                      isLoading={submitting}
+                      onClick={handleRetryEvaluation}
+                    >
+                      <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+                      Retry Evaluation
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {/* Answer Input (If not evaluated yet) */}
               {!currentEval && (
                 <form onSubmit={handleSubmitAnswer} className="space-y-4">
@@ -355,7 +394,50 @@ export const InterviewPage = () => {
 
               {/* AI Real-Time Feedback Card (After submission) */}
               {currentEval && (
-                <div className="space-y-6 pt-2 border-t border-slate-100">
+                <div className="space-y-5 pt-2 border-t border-slate-100">
+                  {/* Verdict & Skill Evidence Header */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200/80">
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        variant={
+                          currentEval.verdict === 'excellent' || currentEval.verdict === 'good'
+                            ? 'success'
+                            : currentEval.verdict === 'partial'
+                            ? 'warning'
+                            : 'danger'
+                        }
+                        size="sm"
+                      >
+                        Verdict: {(currentEval.verdict || 'evaluated').toUpperCase()}
+                      </Badge>
+                      <span className="text-xs text-slate-500 font-medium">
+                        Skill: <strong className="text-slate-800">{currentQuestion?.category || 'Technical'}</strong>
+                      </span>
+                    </div>
+
+                    <div className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                      <span>Evidence:</span>
+                      <span
+                        className={`font-bold uppercase text-[11px] px-2 py-0.5 rounded-md ${
+                          currentEval.skillEvidence === 'strong'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : currentEval.skillEvidence === 'moderate'
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-rose-100 text-rose-800'
+                        }`}
+                      >
+                        {currentEval.skillEvidence || 'insufficient'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Feedback summary */}
+                  {currentEval.feedback && (
+                    <p className="text-xs text-slate-700 italic bg-brand-50/50 p-3 rounded-lg border border-brand-100/70">
+                      "{currentEval.feedback}"
+                    </p>
+                  )}
+
                   {/* Scores Grid */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-center">
@@ -363,7 +445,9 @@ export const InterviewPage = () => {
                         Technical Depth
                       </span>
                       <span className="text-xl font-extrabold font-display text-brand-600">
-                        {currentEval.scores?.technicalAccuracy}%
+                        {currentEval.answerStatus === 'INSUFFICIENT' || currentEval.score === 0
+                          ? '—'
+                          : `${currentEval.scores?.technicalAccuracy ?? currentEval.score ?? 0}%`}
                       </span>
                     </div>
                     <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-center">
@@ -371,7 +455,9 @@ export const InterviewPage = () => {
                         Completeness
                       </span>
                       <span className="text-xl font-extrabold font-display text-indigo-600">
-                        {currentEval.scores?.completeness}%
+                        {currentEval.answerStatus === 'INSUFFICIENT' || currentEval.score === 0
+                          ? '—'
+                          : `${currentEval.scores?.completeness ?? currentEval.score ?? 0}%`}
                       </span>
                     </div>
                     <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-center">
@@ -379,7 +465,9 @@ export const InterviewPage = () => {
                         Clarity
                       </span>
                       <span className="text-xl font-extrabold font-display text-emerald-600">
-                        {currentEval.scores?.clarity}%
+                        {currentEval.answerStatus === 'INSUFFICIENT' || currentEval.score === 0
+                          ? '—'
+                          : `${currentEval.scores?.clarity ?? currentEval.score ?? 0}%`}
                       </span>
                     </div>
                     <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-center">
@@ -387,7 +475,9 @@ export const InterviewPage = () => {
                         Relevance
                       </span>
                       <span className="text-xl font-extrabold font-display text-amber-600">
-                        {currentEval.scores?.relevance}%
+                        {currentEval.answerStatus === 'INSUFFICIENT' || currentEval.score === 0
+                          ? 'Very Low'
+                          : `${currentEval.scores?.relevance ?? currentEval.score ?? 0}%`}
                       </span>
                     </div>
                   </div>
@@ -400,12 +490,16 @@ export const InterviewPage = () => {
                         <Check className="w-3.5 h-3.5 text-emerald-600" /> What You Did Well:
                       </span>
                       <div className="space-y-1">
-                        {currentEval.whatWentWell?.map((w, i) => (
-                          <p key={i} className="text-xs text-slate-700 flex items-start gap-1.5">
-                            <span className="text-emerald-500 font-bold">•</span>
-                            <span>{w}</span>
-                          </p>
-                        ))}
+                        {currentEval.whatWentWell && currentEval.whatWentWell.length > 0 ? (
+                          currentEval.whatWentWell.map((w, i) => (
+                            <p key={i} className="text-xs text-slate-700 flex items-start gap-1.5">
+                              <span className="text-emerald-500 font-bold">•</span>
+                              <span>{w}</span>
+                            </p>
+                          ))
+                        ) : (
+                          <p className="text-xs text-slate-500 italic">No technical strengths identified for this response.</p>
+                        )}
                       </div>
                     </div>
 
@@ -429,7 +523,7 @@ export const InterviewPage = () => {
                   {currentEval.betterApproach && (
                     <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700">
                       <span className="font-bold text-brand-600 uppercase text-[10px] block mb-0.5">
-                        Suggested Approach:
+                        Model Guidance / Expected Benchmark:
                       </span>
                       {currentEval.betterApproach}
                     </div>
@@ -479,7 +573,7 @@ export const InterviewPage = () => {
                 {/* Left: Score Gauge */}
                 <div className="lg:col-span-6 flex items-center justify-center lg:justify-start">
                   <GaugeChart
-                    score={interview.overallScore?.overall || 78}
+                    score={interview.overallScore?.overall ?? 0}
                     max={100}
                     label="MOCK INTERVIEW READINESS"
                     subtext={`Evaluated across 5 questions for ${interview.role} (${interview.difficulty} difficulty).`}
@@ -492,18 +586,20 @@ export const InterviewPage = () => {
                     <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
                       Performance Metrics
                     </span>
-                    <Badge variant="success" size="sm">Interview Completed ✓</Badge>
+                    <Badge variant={interview.overallScore?.overall >= 60 ? 'success' : 'danger'} size="sm">
+                      {interview.overallScore?.overall >= 60 ? 'Interview Passed ✓' : 'Needs Improvement'}
+                    </Badge>
                   </div>
 
                   <div>
                     <div className="flex justify-between text-xs font-semibold text-slate-700 mb-1">
                       <span>Technical Accuracy</span>
-                      <span className="text-brand-600">{interview.overallScore?.breakdown?.technicalAccuracy || 75}%</span>
+                      <span className="text-brand-600">{interview.overallScore?.breakdown?.technicalAccuracy ?? 0}%</span>
                     </div>
                     <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
                       <div
                         className="bg-brand-500 h-1.5 rounded-full"
-                        style={{ width: `${interview.overallScore?.breakdown?.technicalAccuracy || 75}%` }}
+                        style={{ width: `${interview.overallScore?.breakdown?.technicalAccuracy ?? 0}%` }}
                       />
                     </div>
                   </div>
@@ -511,12 +607,12 @@ export const InterviewPage = () => {
                   <div>
                     <div className="flex justify-between text-xs font-semibold text-slate-700 mb-1">
                       <span>Completeness of Response</span>
-                      <span className="text-indigo-600">{interview.overallScore?.breakdown?.completeness || 70}%</span>
+                      <span className="text-indigo-600">{interview.overallScore?.breakdown?.completeness ?? 0}%</span>
                     </div>
                     <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
                       <div
                         className="bg-indigo-500 h-1.5 rounded-full"
-                        style={{ width: `${interview.overallScore?.breakdown?.completeness || 70}%` }}
+                        style={{ width: `${interview.overallScore?.breakdown?.completeness ?? 0}%` }}
                       />
                     </div>
                   </div>
@@ -524,12 +620,12 @@ export const InterviewPage = () => {
                   <div>
                     <div className="flex justify-between text-xs font-semibold text-slate-700 mb-1">
                       <span>Communication Clarity</span>
-                      <span className="text-emerald-600">{interview.overallScore?.breakdown?.clarity || 80}%</span>
+                      <span className="text-emerald-600">{interview.overallScore?.breakdown?.clarity ?? 0}%</span>
                     </div>
                     <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
                       <div
                         className="bg-emerald-500 h-1.5 rounded-full"
-                        style={{ width: `${interview.overallScore?.breakdown?.clarity || 80}%` }}
+                        style={{ width: `${interview.overallScore?.breakdown?.clarity ?? 0}%` }}
                       />
                     </div>
                   </div>
@@ -537,12 +633,12 @@ export const InterviewPage = () => {
                   <div>
                     <div className="flex justify-between text-xs font-semibold text-slate-700 mb-1">
                       <span>Relevance to Prompt</span>
-                      <span className="text-amber-600">{interview.overallScore?.breakdown?.relevance || 85}%</span>
+                      <span className="text-amber-600">{interview.overallScore?.breakdown?.relevance ?? 0}%</span>
                     </div>
                     <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
                       <div
                         className="bg-amber-500 h-1.5 rounded-full"
-                        style={{ width: `${interview.overallScore?.breakdown?.relevance || 85}%` }}
+                        style={{ width: `${interview.overallScore?.breakdown?.relevance ?? 0}%` }}
                       />
                     </div>
                   </div>
@@ -550,16 +646,26 @@ export const InterviewPage = () => {
               </div>
             </Card>
 
-            {/* Questions Recap */}
+            {/* Questions Recap Header & Actions */}
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="font-bold font-display text-slate-900 text-lg">
-                  Question Review & Evaluations
-                </h4>
-                <Button variant="outline" size="sm" onClick={handleRestart}>
-                  <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
-                  Practice Again
-                </Button>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200">
+                <div>
+                  <h4 className="font-bold font-display text-slate-900 text-base">
+                    Question Review & Evaluations
+                  </h4>
+                  <p className="text-xs text-slate-500">
+                    Your skills and Career Readiness score have been updated in real-time based on your responses.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => navigate('/skills')}>
+                    View Updated Skills →
+                  </Button>
+                  <Button variant="primary" size="sm" onClick={handleRestart}>
+                    <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+                    Practice Again
+                  </Button>
+                </div>
               </div>
 
               <div className="space-y-3">
@@ -570,9 +676,15 @@ export const InterviewPage = () => {
                         <span className="text-xs font-bold text-slate-400">Q0{idx + 1}</span>
                         <Badge variant="brand" size="sm">{q.category}</Badge>
                       </div>
-                      <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
-                        {q.scores?.overall || 75}% Score
-                      </span>
+                      {(q.scores?.overall ?? 0) === 0 ? (
+                        <span className="text-xs font-bold text-rose-600 bg-rose-50 border border-rose-200/60 px-2 py-0.5 rounded-md">
+                          0% Score (Insufficient)
+                        </span>
+                      ) : (
+                        <span className="text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200/60 px-2 py-0.5 rounded-md">
+                          {q.scores?.overall}% Score
+                        </span>
+                      )}
                     </div>
 
                     <p className="text-sm font-bold text-slate-900">
@@ -601,3 +713,5 @@ export const InterviewPage = () => {
     </div>
   );
 };
+
+export default InterviewPage;

@@ -39,8 +39,9 @@ export const getStudentAnalytics = async (userId) => {
   const interviewScore = isInterviewCompleted
     ? (interview.overallScore?.overall || interview.scores?.overall || 0)
     : null;
+  const resumeScore = resumeAnalysis?.atsScore?.overall || null;
 
-  const readinessCalc = calculateReadinessScore(profile, careerAnalysis, interviewScore);
+  const readinessCalc = calculateReadinessScore(profile, careerAnalysis, interviewScore, resumeScore);
   const readinessScore = readinessCalc.overall;
   const breakdownRaw = readinessCalc.breakdown;
 

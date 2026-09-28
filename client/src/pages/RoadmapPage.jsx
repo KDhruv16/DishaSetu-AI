@@ -186,34 +186,60 @@ export const RoadmapPage = () => {
             </div>
 
             {/* Next Best Step Card */}
-            <div className="md:col-span-7 bg-gradient-to-r from-brand-600 to-indigo-600 p-5 rounded-2xl text-white shadow-sm flex items-center justify-between gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-brand-200">
-                  <Zap className="w-3.5 h-3.5 text-amber-300" />
-                  Your Next Best Step
+            {roadmap.completedTasks >= roadmap.totalTasks && roadmap.totalTasks > 0 ? (
+              <div className="md:col-span-7 bg-gradient-to-r from-emerald-600 to-teal-600 p-5 rounded-2xl text-white shadow-sm flex items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-emerald-200">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-200" />
+                    Validate Your Progress
+                  </div>
+                  <h4 className="text-sm sm:text-base font-bold font-display text-white leading-snug">
+                    All {roadmap.totalTasks} Sprint Milestones Complete!
+                  </h4>
+                  <p className="text-xs text-emerald-100/90">
+                    Validate your new skills with an AI Mock Interview to upgrade your Career Readiness Score.
+                  </p>
                 </div>
-                <h4 className="text-sm sm:text-base font-bold font-display text-white leading-snug">
-                  {roadmap.nextBestStep}
-                </h4>
-                <p className="text-xs text-brand-100/90">
-                  Focus on this single task to maintain steady weekly momentum.
-                </p>
-              </div>
 
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const firstIncomplete = document.querySelector('[data-incomplete="true"]');
-                  if (firstIncomplete) {
-                    firstIncomplete.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                  }
-                }}
-                className="bg-white/10 hover:bg-white/20 text-white border-white/20 shrink-0 text-xs"
-              >
-                Focus Task →
-              </Button>
-            </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate('/interview')}
+                  className="bg-white hover:bg-emerald-50 text-emerald-800 border-white font-bold shrink-0 text-xs shadow-xs"
+                >
+                  Take Mock Interview →
+                </Button>
+              </div>
+            ) : (
+              <div className="md:col-span-7 bg-gradient-to-r from-brand-600 to-indigo-600 p-5 rounded-2xl text-white shadow-sm flex items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-brand-200">
+                    <Zap className="w-3.5 h-3.5 text-amber-300" />
+                    Your Next Best Step
+                  </div>
+                  <h4 className="text-sm sm:text-base font-bold font-display text-white leading-snug">
+                    {roadmap.nextBestStep}
+                  </h4>
+                  <p className="text-xs text-brand-100/90">
+                    Focus on this single task to maintain steady weekly momentum.
+                  </p>
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const firstIncomplete = document.querySelector('[data-incomplete="true"]');
+                    if (firstIncomplete) {
+                      firstIncomplete.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                  }}
+                  className="bg-white/10 hover:bg-white/20 text-white border-white/20 shrink-0 text-xs"
+                >
+                  Focus Task →
+                </Button>
+              </div>
+            )}
           </div>
         )}
 

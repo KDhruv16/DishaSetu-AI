@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 
 export const GaugeChart = ({
-  score = 78,
+  score = null,
   max = 100,
   size = 140,
   strokeWidth = 12,
@@ -10,10 +10,13 @@ export const GaugeChart = ({
   subtext = "You're on the right track.",
   showSubtext = true,
 }) => {
+  const isPending = score === null || score === undefined || isNaN(score);
+  const numericScore = isPending ? 0 : Math.min(Math.max(Number(score), 0), max);
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-  const percentage = Math.min(Math.max(score, 0), max);
-  const strokeDashoffset = circumference - (percentage / max) * circumference;
+  const strokeDashoffset = isPending
+    ? circumference
+    : circumference - (numericScore / max) * circumference;
 
   return (
     <div className="flex flex-col sm:flex-row items-center gap-6">
@@ -63,7 +66,7 @@ export const GaugeChart = ({
             transition={{ duration: 0.5, delay: 0.3 }}
             className="text-3xl sm:text-4xl font-extrabold font-display text-slate-900 tracking-tight"
           >
-            {score}
+            {isPending ? '—' : numericScore}
           </motion.span>
           <span className="text-[11px] font-semibold text-slate-400 -mt-0.5">/ {max}</span>
         </div>

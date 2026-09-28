@@ -34,7 +34,7 @@ export const TopHeader = () => {
               )}
             </div>
             <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-              {isDemo ? 'Synthetic evaluation profile loaded for MP Online Hackathon judges.' : "Let's move your career forward."}
+              You're making great progress. Keep going!
             </p>
           </div>
         </div>
@@ -46,9 +46,9 @@ export const TopHeader = () => {
             <span>Target: {profile?.career?.targetRole || profile?.targetRole || 'Full Stack Developer'}</span>
           </Badge>
 
-          <Badge variant={isDemo ? 'warning' : 'success'} className="inline-flex items-center gap-1 px-2.5 py-1">
+          <Badge variant="success" className="inline-flex items-center gap-1 px-2.5 py-1">
             <ShieldCheck className="w-3.5 h-3.5" />
-            <span>{isDemo ? 'Demo Data Mode' : 'Profile Verified'}</span>
+            <span>{user?.isOnboarded ? 'Profile Completed' : 'Profile Pending'}</span>
           </Badge>
         </div>
       </div>

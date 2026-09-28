@@ -8,7 +8,7 @@ import { computeNextBestStep } from '../services/nextBestStepService.js';
 
 
 // Skill benchmarks for target roles (rule-based intelligence for baseline readiness calculation)
-const ROLE_SKILL_BENCHMARKS = {
+export const ROLE_SKILL_BENCHMARKS = {
   'Full Stack Developer': ['React', 'Node.js', 'JavaScript', 'HTML/CSS', 'MongoDB', 'SQL', 'Git', 'Docker', 'Testing'],
   'Frontend Developer': ['React', 'JavaScript', 'HTML/CSS', 'Tailwind CSS', 'TypeScript', 'Git', 'Redux', 'UI/UX Basics'],
   'Backend Developer': ['Node.js', 'Express.js', 'SQL', 'MongoDB', 'Docker', 'REST APIs', 'Authentication', 'System Design'],
@@ -31,12 +31,12 @@ const calculateReadiness = (targetRole, userSkills = []) => {
   );
 
   const skillMatchScore =
-    benchmarkSkills.length > 0
+    userSkills.length > 0 && benchmarkSkills.length > 0
       ? Math.round((matchedSkills.length / benchmarkSkills.length) * 100)
-      : 0;
+      : null;
 
-  // Initial profile-based readiness baseline (provisional until resume and interview assessments are completed)
-  const readinessScore = Math.round(skillMatchScore * 0.6);
+  // New profiles start with Evaluation Pending (null) until real resume and mock interview are completed
+  const readinessScore = null;
 
   const topSkillGaps = missingSkills.slice(0, 3).map((skill, index) => {
     let priority = index === 0 ? 'High' : 'Medium';
@@ -47,16 +47,14 @@ const calculateReadiness = (targetRole, userSkills = []) => {
     return { name: skill, priority, reason };
   });
 
-  const nextBestStep =
-    topSkillGaps.length > 0
-      ? `Improve your skills by learning ${topSkillGaps[0].name}.`
-      : 'Upload your resume to start tracking your ATS score.';
+  const nextBestStep = 'Upload your resume and complete a mock interview to evaluate your Career Readiness.';
 
   return {
     readinessScore,
     skillMatchScore,
     resumeScore: null,
     interviewScore: null,
+    skillAssessmentScore: null,
     topSkillGaps: topSkillGaps.length > 0 ? topSkillGaps : [],
     nextBestStep,
   };
@@ -95,10 +93,10 @@ export const getProfile = async (req, res) => {
 // @access  Private
 export const saveOnboardingProfile = async (req, res) => {
   try {
-    const { personal, academics, career, skills } = req.body;
+    const { personal, academics, career, skills, targetRole: flatRole, currentSkills: flatSkills } = req.body;
 
-    const targetRole = career?.targetRole || 'Full Stack Developer';
-    const userSkills = skills?.currentSkills || [];
+    const targetRole = career?.targetRole || flatRole || 'Full Stack Developer';
+    const userSkills = skills?.currentSkills || flatSkills || [];
 
     const readinessMetrics = calculateReadiness(targetRole, userSkills);
 
@@ -107,8 +105,8 @@ export const saveOnboardingProfile = async (req, res) => {
     if (profile) {
       profile.personal = personal || profile.personal;
       profile.academics = academics || profile.academics;
-      profile.career = career || profile.career;
-      profile.skills = skills || profile.skills;
+      profile.career = career || { targetRole };
+      profile.skills = skills || { currentSkills: userSkills };
       profile.readiness = {
         ...profile.readiness,
         ...readinessMetrics,

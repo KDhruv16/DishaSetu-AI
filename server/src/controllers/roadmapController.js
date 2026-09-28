@@ -2,6 +2,7 @@ import Roadmap from '../models/Roadmap.js';
 import Profile from '../models/Profile.js';
 import CareerAnalysis from '../models/CareerAnalysis.js';
 import { generatePersonalizedRoadmap, calculateNextBestStep } from '../services/roadmapService.js';
+import { normalizeSkillName, ROLE_SKILL_BENCHMARKS } from '../utils/skillNormalization.js';
 
 // @desc    Get user's personalized career roadmap
 // @route   GET /api/roadmap
@@ -13,7 +14,9 @@ export const getRoadmap = async (req, res) => {
     if (!roadmap) {
       // If student has a profile and career analysis, auto-generate roadmap
       const profile = await Profile.findOne({ user: req.user._id });
-      const careerAnalysis = await CareerAnalysis.findOne({ user: req.user._id });
+      const careerAnalysis = await CareerAnalysis.findOne({
+        $or: [{ userId: req.user._id }, { user: req.user._id }],
+      });
 
       if (profile) {
         const generated = generatePersonalizedRoadmap(profile, careerAnalysis);
@@ -45,7 +48,9 @@ export const getRoadmap = async (req, res) => {
 export const generateRoadmap = async (req, res) => {
   try {
     const profile = await Profile.findOne({ user: req.user._id });
-    const careerAnalysis = await CareerAnalysis.findOne({ user: req.user._id });
+    const careerAnalysis = await CareerAnalysis.findOne({
+      $or: [{ userId: req.user._id }, { user: req.user._id }],
+    });
 
     const generated = generatePersonalizedRoadmap(profile, careerAnalysis);
 
@@ -121,11 +126,21 @@ export const toggleTask = async (req, res) => {
     // Recalculate progress deterministically
     let completedCount = 0;
     let totalCount = 0;
+    const skillTasksMap = {};
 
     roadmap.weeks.forEach((w) => {
       w.tasks.forEach((t) => {
         totalCount++;
         if (t.completed) completedCount++;
+
+        const skillName = normalizeSkillName(t.skill?.trim());
+        if (skillName) {
+          if (!skillTasksMap[skillName]) {
+            skillTasksMap[skillName] = { total: 0, completed: 0 };
+          }
+          skillTasksMap[skillName].total++;
+          if (t.completed) skillTasksMap[skillName].completed++;
+        }
       });
     });
 
@@ -135,6 +150,74 @@ export const toggleTask = async (req, res) => {
     roadmap.nextBestStep = calculateNextBestStep(roadmap.weeks);
 
     await roadmap.save();
+
+    // Propagate skill completion to Profile and CareerAnalysis
+    const profile = await Profile.findOne({ user: req.user._id });
+    if (profile) {
+      if (!profile.skills) profile.skills = {};
+      const currentSkills = (profile.skills.currentSkills || []).map((s) => normalizeSkillName(s));
+      const currentLower = currentSkills.map((s) => s.toLowerCase());
+
+      const readySkillsSet = new Set(
+        (profile.skills.readyForEvaluationSkills || []).map((s) => normalizeSkillName(s))
+      );
+      const learningSkillsSet = new Set(
+        (profile.skills.learningSkills || []).map((s) => normalizeSkillName(s))
+      );
+
+      // Evaluate each skill present in the roadmap
+      Object.entries(skillTasksMap).forEach(([skill, stats]) => {
+        const canonical = normalizeSkillName(skill);
+        if (currentLower.includes(canonical.toLowerCase())) return;
+
+        if (stats.completed === stats.total && stats.total > 0) {
+          // All tasks for this skill in the roadmap are finished
+          readySkillsSet.add(canonical);
+          learningSkillsSet.delete(canonical);
+        } else if (stats.completed > 0) {
+          // In progress
+          learningSkillsSet.add(canonical);
+          readySkillsSet.delete(canonical);
+        } else {
+          // 0 tasks completed
+          readySkillsSet.delete(canonical);
+          learningSkillsSet.delete(canonical);
+        }
+      });
+
+      profile.skills.readyForEvaluationSkills = Array.from(readySkillsSet).filter(Boolean);
+      profile.skills.learningSkills = Array.from(learningSkillsSet).filter(Boolean);
+
+      // Update remaining top skill gaps
+      const targetRole = profile.career?.targetRole || profile.targetRole || 'Full Stack Developer';
+      const benchmarkSkills = ROLE_SKILL_BENCHMARKS[targetRole] || ROLE_SKILL_BENCHMARKS['Full Stack Developer'] || [];
+
+      const readyLower = Array.from(readySkillsSet).map((s) => s.toLowerCase());
+      const remainingGaps = benchmarkSkills.filter(
+        (b) => !currentLower.includes(b.toLowerCase()) && !readyLower.includes(b.toLowerCase())
+      );
+
+      profile.readiness.topSkillGaps = remainingGaps.slice(0, 3).map((skill, index) => ({
+        name: normalizeSkillName(skill),
+        priority: index === 0 ? 'High' : 'Medium',
+        reason: `Crucial competency required for ${targetRole} workflows.`,
+      }));
+
+      await profile.save();
+
+      // Update CareerAnalysis missingSkills
+      const careerAnalysis = await CareerAnalysis.findOne({
+        $or: [{ userId: req.user._id }, { user: req.user._id }],
+      });
+      if (careerAnalysis && careerAnalysis.careers?.length > 0) {
+        careerAnalysis.careers[0].missingSkills = remainingGaps.map((skill, index) => ({
+          skill: normalizeSkillName(skill),
+          priority: index === 0 ? 'High' : 'Medium',
+          reason: `Crucial competency required for ${targetRole} workflows.`,
+        }));
+        await careerAnalysis.save();
+      }
+    }
 
     res.status(200).json({
       success: true,

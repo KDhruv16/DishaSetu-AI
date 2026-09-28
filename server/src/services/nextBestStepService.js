@@ -33,7 +33,21 @@ export const computeNextBestStep = ({
     profile?.targetRole ||
     'Full Stack Developer';
 
-  // 1. Priority 1: High-priority incomplete roadmap skill task
+  // 1. If roadmap is 100% completed and interview is pending / needs validation
+  const isRoadmapDone = roadmap && roadmap.totalTasks > 0 && roadmap.completedTasks >= roadmap.totalTasks;
+  const isInterviewDone = Boolean(interview?.completed && (interview?.overallScore?.overall || 0) >= 60);
+
+  if (isRoadmapDone && !isInterviewDone) {
+    return {
+      title: 'Validate Your Progress',
+      description: 'All roadmap milestones complete! Validate your newly acquired skills with an AI Mock Interview.',
+      reason: 'Simulated interview evaluation verifies your newly learned competencies and updates your Career Readiness Score.',
+      action: 'Take Mock Interview →',
+      route: '/interview',
+    };
+  }
+
+  // Priority 1: High-priority incomplete roadmap skill task
   if (roadmap && Array.isArray(roadmap.weeks) && roadmap.weeks.length > 0) {
     for (const week of roadmap.weeks) {
       if (Array.isArray(week.tasks)) {

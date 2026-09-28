@@ -29,19 +29,20 @@ export const CareerJourney = ({
 }) => {
   const navigate = useNavigate();
 
-  // Evaluate deterministic status for each of the 9 required stages
+  // Evaluate deterministic status for each of the 9 required stages based on REAL user progress
   const isProfileDone = Boolean(user?.isOnboarded && profile?.skills?.currentSkills?.length > 0);
-  const isCareerDone = Boolean(analysis?.careers?.length > 0);
+  const isResumeDone = Boolean(resumeAnalysis && typeof resumeAnalysis.atsScore?.overall === 'number' && resumeAnalysis.atsScore.overall > 0);
+  const isInterviewDone = Boolean(interviewAnalysis && interviewAnalysis.completed === true);
+  const isRoadmapStarted = Boolean(roadmapData && roadmapData.completedTasks > 0);
+  const isRoadmapCompleted = Boolean(roadmapData && roadmapData.completedTasks >= (roadmapData.totalTasks || 12) && roadmapData.completedTasks > 0);
+  const isCareerDone = Boolean(analysis?.careers?.length > 0 && isProfileDone);
   const isSkillGapDone = Boolean(
-    analysis?.careers?.[0]?.missingSkills !== undefined || profile?.readiness?.topSkillGaps?.length > 0
+    (profile?.readiness?.skillAssessmentScore && profile.readiness.skillAssessmentScore > 0) ||
+    (isCareerDone && isResumeDone)
   );
-  const isRoadmapDone = Boolean(roadmapData && (roadmapData.completedTasks > 0 || roadmapData.overallProgress > 0));
-  const isLearningDone = Boolean(roadmapData?.completedTasks > 0 || roadmapData?.weeks?.length > 0);
-  const isResumeDone = Boolean(resumeAnalysis && resumeAnalysis.atsScore?.overall > 0);
-  const isInterviewDone = Boolean(interviewAnalysis && interviewAnalysis.completed);
-  const isOpportunitiesDone = Boolean(recommendedOpps && recommendedOpps.length > 0);
+  const isOpportunitiesDone = Boolean(isResumeDone && isInterviewDone && recommendedOpps && recommendedOpps.length > 0);
   const isCareerReadyDone = Boolean(
-    readinessScore >= 80 && isResumeDone && isInterviewDone && isRoadmapDone
+    typeof readinessScore === 'number' && readinessScore >= 80 && isResumeDone && isInterviewDone && isRoadmapStarted
   );
 
   // Compute status: 'completed' | 'current' | 'upcoming'
@@ -56,14 +57,14 @@ export const CareerJourney = ({
         if (isSkillGapDone) return 'completed';
         return isCareerDone ? 'current' : 'upcoming';
       case 'learning':
-        if (isLearningDone) return 'completed';
+        if (isRoadmapStarted) return 'completed';
         return isSkillGapDone ? 'current' : 'upcoming';
       case 'roadmap':
-        if (isRoadmapDone) return 'completed';
-        return isLearningDone || isSkillGapDone ? 'current' : 'upcoming';
+        if (isRoadmapCompleted) return 'completed';
+        return isRoadmapStarted ? 'current' : (isSkillGapDone ? 'upcoming' : 'upcoming');
       case 'resume':
         if (isResumeDone) return 'completed';
-        return isRoadmapDone ? 'current' : 'upcoming';
+        return isProfileDone ? 'current' : 'upcoming';
       case 'interview':
         if (isInterviewDone) return 'completed';
         return isResumeDone ? 'current' : 'upcoming';
@@ -72,7 +73,7 @@ export const CareerJourney = ({
         return isInterviewDone ? 'current' : 'upcoming';
       case 'ready':
         if (isCareerReadyDone) return 'completed';
-        return isInterviewDone || isOpportunitiesDone ? 'current' : 'upcoming';
+        return isOpportunitiesDone ? 'current' : 'upcoming';
       default:
         return 'upcoming';
     }

@@ -2,25 +2,32 @@
  * Deterministic Career Readiness Score Calculator
  * 
  * Formula Weights:
- * - Technical Skills: 30%
+ * - Technical Skills Match: 30%
  * - Projects: 20%
- * - Experience (Internships + Certifications): 15%
+ * - Experience (Internships & Certifications): 15%
  * - Education (Academics & CGPA): 10%
  * - Target Skill Coverage: 15%
  * - Interview Readiness: 10% (Updated strictly with actual completed mock interview score)
  */
 
-export const calculateReadinessScore = (profile, careerAnalysis = null, interviewScore = null) => {
+export const calculateReadinessScore = (
+  profile,
+  careerAnalysis = null,
+  interviewScore = null,
+  resumeScore = null
+) => {
   if (!profile) {
     return {
-      overall: 0,
+      overall: null,
+      isPending: true,
       breakdown: {
         technicalSkills: 0,
         projects: 0,
         experience: 0,
         education: 0,
         targetSkillCoverage: 0,
-        interviewReadiness: 0,
+        interviewReadiness: null,
+        resumeATS: null,
       },
     };
   }
@@ -78,24 +85,33 @@ export const calculateReadinessScore = (profile, careerAnalysis = null, intervie
   }
 
   // 6. Interview Readiness Score -> 10%
-  // Strictly uses verified completed mock interview score (0 if not yet attempted)
-  let actualInterview = 0;
-  if (typeof interviewScore === 'number' && interviewScore > 0) {
-    actualInterview = interviewScore;
+  const hasInterview = typeof interviewScore === 'number' && interviewScore > 0;
+  const actualInterview = hasInterview ? interviewScore : null;
+
+  // 7. Resume ATS Score
+  const hasResume = typeof resumeScore === 'number' && resumeScore > 0;
+  const actualResume = hasResume ? resumeScore : null;
+
+  // If core evaluations (resume scan or mock interview) have not yet occurred, readiness is Evaluation Pending
+  const isPending = !hasInterview && !hasResume;
+
+  let overall = null;
+  if (!isPending) {
+    const interviewWeight = hasInterview ? actualInterview * 0.10 : 0;
+    overall = Math.round(
+      technicalSkills * 0.30 +
+      projectScore * 0.20 +
+      experienceScore * 0.15 +
+      educationScore * 0.10 +
+      targetSkillCoverage * 0.15 +
+      interviewWeight
+    );
+    overall = Math.min(96, Math.max(0, overall));
   }
 
-  // Calculate Weighted Overall Score
-  const overall = Math.round(
-    technicalSkills * 0.30 +
-    projectScore * 0.20 +
-    experienceScore * 0.15 +
-    educationScore * 0.10 +
-    targetSkillCoverage * 0.15 +
-    actualInterview * 0.10
-  );
-
   return {
-    overall: Math.min(96, Math.max(0, overall)),
+    overall,
+    isPending,
     breakdown: {
       technicalSkills,
       projects: projectScore,
@@ -103,6 +119,7 @@ export const calculateReadinessScore = (profile, careerAnalysis = null, intervie
       education: educationScore,
       targetSkillCoverage,
       interviewReadiness: actualInterview,
+      resumeATS: actualResume,
     },
   };
 };
