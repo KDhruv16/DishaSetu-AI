@@ -30,6 +30,14 @@ export const protect = async (req, res, next) => {
         message: 'User no longer exists.',
       });
     }
+
+    if (req.user.isActive === false) {
+      return res.status(403).json({
+        success: false,
+        message: 'Your account has been deactivated. Please contact support.',
+      });
+    }
+
     next();
   } catch (err) {
     return res.status(401).json({
@@ -38,3 +46,17 @@ export const protect = async (req, res, next) => {
     });
   }
 };
+
+/**
+ * Middleware to restrict access to administrators only
+ */
+export const requireAdmin = (req, res, next) => {
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied. Administrative privileges required.',
+    });
+  }
+  next();
+};
+

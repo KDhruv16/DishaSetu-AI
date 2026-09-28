@@ -97,6 +97,13 @@ export const login = async (req, res) => {
       });
     }
 
+    if (user.isActive === false) {
+      return res.status(403).json({
+        success: false,
+        message: 'Your account has been deactivated. Please contact the administrator.',
+      });
+    }
+
     const token = generateToken(user._id);
 
     return res.status(200).json({
@@ -106,6 +113,8 @@ export const login = async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        role: user.role || 'user',
+        isActive: user.isActive !== false,
         isOnboarded: user.isOnboarded,
       },
     });
@@ -143,6 +152,8 @@ export const demoLogin = async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        role: user.role || 'user',
+        isActive: user.isActive !== false,
         isOnboarded: true,
         isDemo: true,
       },
@@ -161,7 +172,6 @@ export const demoLogin = async (req, res) => {
 // @route   GET /api/auth/me
 // @access  Private
 export const getMe = async (req, res) => {
-
   try {
     const user = await User.findById(req.user._id);
     if (!user) {
@@ -170,12 +180,22 @@ export const getMe = async (req, res) => {
         message: 'User not found',
       });
     }
+
+    if (user.isActive === false) {
+      return res.status(403).json({
+        success: false,
+        message: 'Your account has been deactivated.',
+      });
+    }
+
     return res.status(200).json({
       success: true,
       user: {
         id: user._id,
         name: user.name,
         email: user.email,
+        role: user.role || 'user',
+        isActive: user.isActive !== false,
         isOnboarded: user.isOnboarded,
         isDemo: user.email === 'demo@dishasetu.ai',
       },

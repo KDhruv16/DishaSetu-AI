@@ -101,6 +101,9 @@ export const submitAnswer = async (req, res) => {
     targetQuestion.studentAnswer = studentAnswer.trim();
     targetQuestion.isAnswered = true;
     targetQuestion.answerStatus = (evaluation.answerStatus || (evaluation.score === 0 ? 'INSUFFICIENT' : 'VALID')).toUpperCase();
+    targetQuestion.isMeaningfulAnswer = evaluation.isMeaningfulAnswer !== undefined ? evaluation.isMeaningfulAnswer : (evaluation.score > 0);
+    targetQuestion.isQuestionRestatement = evaluation.isQuestionRestatement === true;
+    targetQuestion.validityReason = evaluation.validityReason || '';
     targetQuestion.verdict = (evaluation.verdict || 'unanswered').toLowerCase();
     targetQuestion.skillEvidence = (evaluation.skillEvidence || 'insufficient').toLowerCase();
     targetQuestion.feedback = evaluation.feedback || '';

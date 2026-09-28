@@ -182,8 +182,11 @@ const HR_QUESTIONS = [
   { skill: 'Time Management', difficulty: 'Medium', text: 'How do you prioritize deadlines when managing multiple coursework assignments and software projects simultaneously?', expectedRubric: 'Mentions prioritization frameworks (Eisenhower matrix, sprint planning, milestones), calendar blocking, and proactive communication.' },
 ];
 
+import InterviewQuestion from '../models/InterviewQuestion.js';
+
 /**
  * Generate 5 Tailored Interview Questions
+ * Uses dynamic database-backed question bank managed by Admin, falling back gracefully to curated taxonomy.
  */
 export const generateQuestions = async (
   role = 'Full Stack Developer',
@@ -192,14 +195,35 @@ export const generateQuestions = async (
   skills = [],
   readySkills = []
 ) => {
-  const targetRole = ROLE_SKILL_QUESTIONS[role] ? role : 'Full Stack Developer';
-  const rolePool = ROLE_SKILL_QUESTIONS[targetRole] || ROLE_SKILL_QUESTIONS['Full Stack Developer'];
+  const targetRole = role || 'Full Stack Developer';
+  let dbQuestions = [];
+
+  try {
+    const query = { isActive: true };
+    if (type === 'HR') {
+      query.type = 'HR';
+    } else {
+      query.role = targetRole;
+    }
+    dbQuestions = await InterviewQuestion.find(query);
+  } catch (err) {
+    console.warn('DB InterviewQuestion query fallback:', err.message);
+  }
+
+  const rolePool = dbQuestions.length > 0
+    ? dbQuestions.map((q) => ({
+        skill: q.skill,
+        difficulty: q.difficulty || 'Medium',
+        text: q.questionText,
+        expectedRubric: q.expectedRubric,
+      }))
+    : (ROLE_SKILL_QUESTIONS[targetRole] || ROLE_SKILL_QUESTIONS['Full Stack Developer'] || []);
 
   const normalizedReady = (readySkills || []).map((s) => normalizeSkillName(s).toLowerCase());
   let selected = [];
 
   if (type === 'HR') {
-    selected = HR_QUESTIONS.slice(0, 5);
+    selected = (rolePool.length > 0 ? rolePool : HR_QUESTIONS).slice(0, 5);
   } else if (type === 'Mixed') {
     const techPick = rolePool.slice(0, 3);
     const hrPick = HR_QUESTIONS.slice(0, 2);
@@ -245,13 +269,31 @@ export const generateQuestions = async (
 };
 
 /**
- * STAGE 1: Deterministic Answer Validity Gate
- * Determines whether candidate's response contains meaningful information attempting to answer THIS question.
- * Returns: { answerStatus: 'VALID' | 'PARTIAL' | 'INSUFFICIENT', reason: string }
+ * STAGE 1: Deterministic Heuristic & Algorithmic Answer Validity Gate
+ * Checks candidate answer for empty, gibberish, explicit unknown, question echo / repetition + agreement,
+ * filler padding, off-topic personal intro, and keyword-only spam.
+ *
+ * Returns: {
+ *   isMeaningfulAnswer: boolean,
+ *   isQuestionRestatement: boolean,
+ *   isOffTopic: boolean,
+ *   isExplicitUnknown: boolean,
+ *   isKeywordSpam: boolean,
+ *   answerStatus: 'VALID' | 'PARTIAL' | 'INSUFFICIENT',
+ *   reason: string
+ * }
  */
 export const determineAnswerValidity = (text, questionText = '', expectedRubric = '') => {
   if (!text || typeof text !== 'string') {
-    return { answerStatus: 'INSUFFICIENT', reason: 'The response is empty.' };
+    return {
+      isMeaningfulAnswer: false,
+      isQuestionRestatement: false,
+      isOffTopic: false,
+      isExplicitUnknown: false,
+      isKeywordSpam: false,
+      answerStatus: 'INSUFFICIENT',
+      reason: 'The response is empty.',
+    };
   }
 
   const clean = text.trim();
@@ -260,7 +302,15 @@ export const determineAnswerValidity = (text, questionText = '', expectedRubric 
 
   // 1. Empty or extremely short nonsense ("abc", "xyz", "..")
   if (clean.length < 3 || words.length < 1) {
-    return { answerStatus: 'INSUFFICIENT', reason: 'The response does not contain substantive content.' };
+    return {
+      isMeaningfulAnswer: false,
+      isQuestionRestatement: false,
+      isOffTopic: false,
+      isExplicitUnknown: false,
+      isKeywordSpam: false,
+      answerStatus: 'INSUFFICIENT',
+      reason: 'The response does not contain substantive content.',
+    };
   }
 
   const pureGibberish = new Set([
@@ -269,7 +319,15 @@ export const determineAnswerValidity = (text, questionText = '', expectedRubric 
     'yes', 'no', 'dunno', 'nope', 'nah', 'lol', 'good', 'nice', 'cool',
   ]);
   if (pureGibberish.has(lower) || /^(.)\1{3,}$/.test(lower)) {
-    return { answerStatus: 'INSUFFICIENT', reason: 'The response contains meaningless or single-character gibberish.' };
+    return {
+      isMeaningfulAnswer: false,
+      isQuestionRestatement: false,
+      isOffTopic: false,
+      isExplicitUnknown: false,
+      isKeywordSpam: false,
+      answerStatus: 'INSUFFICIENT',
+      reason: 'The response contains meaningless or single-character gibberish.',
+    };
   }
 
   // 2. Explicit "I don't know" / unknown statements
@@ -288,6 +346,7 @@ export const determineAnswerValidity = (text, questionText = '', expectedRubric 
     /\bnot aware\b/i,
     /\bunable to answer\b/i,
     /\bi am not know\b/i,
+    /\bnot knowing\b/i,
   ];
   const hasUnknownStatement = unknownPatterns.some((pattern) => pattern.test(lower));
 
@@ -305,46 +364,124 @@ export const determineAnswerValidity = (text, questionText = '', expectedRubric 
   ];
   const hasFiller = fillerPatterns.some((pattern) => pattern.test(lower));
 
-  // Extract key concept tokens from question & expected rubric
-  const combinedText = `${questionText} ${expectedRubric || ''}`;
+  // 4. CRITICAL QUESTION-REPETITION / ECHO & AGREEMENT DETECTION
+  // E.g. Question: "Explain the difference between INNER JOIN, LEFT JOIN, and FULL OUTER JOIN in SQL with practical use cases."
+  // Answer: "Explain the difference between INNER JOIN, LEFT JOIN, and FULL OUTER JOIN in SQL with practical use cases yeah it is right i am agree with our point"
+  const cleanQ = questionText.toLowerCase().replace(/[^\w\s]/g, ' ').trim();
+  const qWords = cleanQ.split(/\s+/).filter((w) => w.length >= 2);
+  const qWordSet = new Set(qWords);
+
+  const cleanAns = lower.replace(/[^\w\s]/g, ' ').trim();
+  const ansWords = cleanAns.split(/\s+/).filter((w) => w.length >= 2);
+
+  // Common agreement/filler words often appended to copied question
+  const agreementAndFillerWords = new Set([
+    'yes', 'yeah', 'yep', 'it', 'is', 'right', 'i', 'am', 'agree', 'with', 'our', 'point',
+    'points', 'correct', 'true', 'ok', 'okay', 'sure', 'fine', 'exactly', 'same', 'as',
+    'above', 'well', 'said', 'understood', 'know', 'that', 'this', 'can', 'you', 'please',
+    'tell', 'me', 'what', 'how', 'why'
+  ]);
+
+  // Check how many words in candidate answer come from the question or agreement filler
+  let questionMatchCount = 0;
+  let substantiveNovelWords = [];
+
+  for (const w of ansWords) {
+    if (qWordSet.has(w)) {
+      questionMatchCount++;
+    } else if (!agreementAndFillerWords.has(w)) {
+      substantiveNovelWords.push(w);
+    }
+  }
+
+  const questionOverlapRatio = ansWords.length > 0 ? questionMatchCount / ansWords.length : 0;
+  const isQuestionExactCopy = cleanAns === cleanQ || cleanAns.startsWith(cleanQ);
+
+  if (isQuestionExactCopy && substantiveNovelWords.length < 5) {
+    return {
+      isMeaningfulAnswer: false,
+      isQuestionRestatement: true,
+      isOffTopic: false,
+      isExplicitUnknown: false,
+      isKeywordSpam: false,
+      answerStatus: 'INSUFFICIENT',
+      reason: 'The candidate merely repeated/copied the question with agreement or filler and did not provide an answer.',
+    };
+  }
+
+  if (questionOverlapRatio > 0.60 && substantiveNovelWords.length < 5 && ansWords.length >= 5) {
+    return {
+      isMeaningfulAnswer: false,
+      isQuestionRestatement: true,
+      isOffTopic: false,
+      isExplicitUnknown: false,
+      isKeywordSpam: false,
+      answerStatus: 'INSUFFICIENT',
+      reason: 'The response repeats the question terms with agreement words without introducing new explanatory content.',
+    };
+  }
+
+  // Extract key concept tokens from expected rubric (NOT the question, to prevent echo passing)
   const stopWords = new Set([
     'what', 'explain', 'difference', 'between', 'with', 'from', 'this', 'that', 'they',
     'does', 'your', 'about', 'when', 'which', 'where', 'have', 'been', 'should', 'would',
     'could', 'into', 'some', 'more', 'also', 'such', 'like', 'than', 'them', 'these', 'those'
   ]);
-  const rawTokens = combinedText
+  const rawRubricTokens = (expectedRubric || '')
     .toLowerCase()
     .replace(/[^\w\s]/g, ' ')
     .split(/\s+/)
     .filter((w) => w.length >= 4 && !stopWords.has(w));
-  const uniqueTokens = Array.from(new Set(rawTokens));
+  const uniqueRubricTokens = Array.from(new Set(rawRubricTokens));
 
-  const matchedTokens = uniqueTokens.filter((token) => {
+  const matchedRubricTokens = uniqueRubricTokens.filter((token) => {
     const stem = token.length > 5 ? token.slice(0, 5) : token;
     return lower.includes(token) || lower.includes(stem);
   });
-  const matchRatio = uniqueTokens.length > 0 ? matchedTokens.length / uniqueTokens.length : 0;
+  const rubricMatchRatio = uniqueRubricTokens.length > 0 ? matchedRubricTokens.length / uniqueRubricTokens.length : 0;
 
-  // If candidate stated they don't know or wrote padding, and matched <= 1 concept token
-  if ((hasUnknownStatement || hasFiller) && matchedTokens.length <= 1) {
+  // 5. Personal introduction without technical relevance (e.g. "My name is Rahul and I am a B.Tech student.")
+  const isPersonalIntro = /^(hello|hi|hey|good morning|good afternoon)?\s*,?\s*(my name is|i am|i'm|myself)\s+/i.test(lower);
+  if (isPersonalIntro && rubricMatchRatio === 0) {
     return {
-      answerStatus: 'INSUFFICIENT',
-      reason: hasUnknownStatement
-        ? 'The candidate explicitly stated a lack of knowledge with no valid technical explanation.'
-        : 'The response contains filler phrases / intentional padding with no technical explanation.',
-    };
-  }
-
-  // 4. Personal introduction without technical relevance (e.g. "My name is Rahul and I like cricket")
-  const isPersonalIntro = /^(hello|hi|hey)?\s*(my name is|i am|i'm)\s+[a-z0-9_ -]+\s+and\s+/i.test(lower);
-  if (isPersonalIntro && matchedTokens.length === 0) {
-    return {
+      isMeaningfulAnswer: false,
+      isQuestionRestatement: false,
+      isOffTopic: true,
+      isExplicitUnknown: false,
+      isKeywordSpam: false,
       answerStatus: 'INSUFFICIENT',
       reason: 'The response is an off-topic personal introduction unrelated to the technical question.',
     };
   }
 
-  // 5. Keyword spam without explanatory sentence structure
+  // 6. Explicit unknown statements without technical explanation
+  if (hasUnknownStatement && (substantiveNovelWords.length < 4 || rubricMatchRatio === 0)) {
+    return {
+      isMeaningfulAnswer: false,
+      isQuestionRestatement: false,
+      isOffTopic: false,
+      isExplicitUnknown: true,
+      isKeywordSpam: false,
+      answerStatus: 'INSUFFICIENT',
+      reason: 'The candidate explicitly stated a lack of knowledge with no valid technical explanation.',
+    };
+  }
+
+  // 7. Filler / intentional padding with no explanation
+  if (hasFiller && (substantiveNovelWords.length < 4 || rubricMatchRatio === 0)) {
+    return {
+      isMeaningfulAnswer: false,
+      isQuestionRestatement: false,
+      isOffTopic: false,
+      isExplicitUnknown: false,
+      isKeywordSpam: false,
+      answerStatus: 'INSUFFICIENT',
+      reason: 'The response contains filler phrases / intentional padding with no technical explanation.',
+    };
+  }
+
+  // 8. Keyword spam without explanatory sentence structure
+  // E.g. "INNER JOIN LEFT JOIN SQL TABLE DATABASE JOIN JOIN"
   const explanatoryTokens = [
     'is', 'are', 'was', 'were', 'returns', 'preserves', 'calculates', 'allows', 'without',
     'because', 'when', 'which', 'that', 'where', 'while', 'than', 'perform', 'calculate',
@@ -352,39 +489,165 @@ export const determineAnswerValidity = (text, questionText = '', expectedRubric 
     'dropping', 'imputing', 'impute', 'converting', 'convert', 'measure', 'measures',
     'structure', 'structuring', 'filter', 'filters', 'filtering', 'aggregate', 'aggregates',
     'aggregation', 'sensitive', 'robust', 'instead', 'difference', 'lookup', 'lookups',
-    'searches', 'with', 'by', 'for', 'from', 'into', 'then', 'also'
+    'searches', 'with', 'by', 'for', 'from', 'into', 'then', 'also', 'matches', 'unmatched',
+    'null', 'nulls', 'table', 'rows', 'columns', 'value', 'values', 'query', 'queries'
   ];
   const hasExplanatoryStructure = explanatoryTokens.some((t) => lower.includes(t));
 
   if (words.length >= 4 && words.length <= 25 && !hasExplanatoryStructure) {
-    if (matchRatio >= 0.5) {
-      return {
-        answerStatus: 'INSUFFICIENT',
-        reason: 'The response is a list of keywords without conceptual explanation or reasoning.',
-      };
-    }
+    return {
+      isMeaningfulAnswer: false,
+      isQuestionRestatement: false,
+      isOffTopic: false,
+      isExplicitUnknown: false,
+      isKeywordSpam: true,
+      answerStatus: 'INSUFFICIENT',
+      reason: 'The response is a list of keywords without conceptual explanation or reasoning.',
+    };
   }
 
-  // 6. Zero concept overlap with the question domain
-  if (matchRatio === 0 && words.length >= 4) {
+  // 9. Zero concept overlap with the expected rubric
+  if (rubricMatchRatio === 0) {
     return {
+      isMeaningfulAnswer: false,
+      isQuestionRestatement: false,
+      isOffTopic: true,
+      isExplicitUnknown: false,
+      isKeywordSpam: false,
       answerStatus: 'INSUFFICIENT',
-      reason: 'The response does not address the interview question.',
+      reason: 'The response does not address the interview question or core technical concepts.',
     };
   }
 
   // Passed Stage 1: VALID or PARTIAL
-  if (matchRatio >= 0.25 && hasExplanatoryStructure) {
-    return { answerStatus: 'VALID' };
+  if (rubricMatchRatio >= 0.20 && hasExplanatoryStructure) {
+    return {
+      isMeaningfulAnswer: true,
+      isQuestionRestatement: false,
+      isOffTopic: false,
+      isExplicitUnknown: false,
+      isKeywordSpam: false,
+      answerStatus: 'VALID',
+      reason: 'Response provides relevant technical propositions answering the question.',
+    };
   }
 
-  return { answerStatus: 'PARTIAL' };
+  return {
+    isMeaningfulAnswer: true,
+    isQuestionRestatement: false,
+    isOffTopic: false,
+    isExplicitUnknown: false,
+    isKeywordSpam: false,
+    answerStatus: 'PARTIAL',
+    reason: 'Response provides partial technical information.',
+  };
 };
 
 /**
- * Call Google Gemini Generative AI API for Strict Technical Answer Evaluation
+ * STAGE 1 AI CALL: Dedicated Gemini Answer Validity Judge
+ * Responsible ONLY for answering: "Does this candidate response actually attempt to answer the question?"
+ * Must NOT calculate a quality score.
  */
-export const callGeminiAnswerEvaluation = async (
+export const callGeminiValidityJudge = async (
+  questionText,
+  studentAnswer,
+  role = 'Data Analyst',
+  skill = 'SQL'
+) => {
+  const apiKey = process.env.GEMINI_API_KEY || process.env.AI_API_KEY || process.env.OPENAI_API_KEY;
+  if (!apiKey) return null;
+
+  const models = [
+    process.env.GEMINI_MODEL || 'gemini-1.5-flash',
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-1.5-pro',
+    'gemini-pro',
+  ];
+
+  const prompt = `You are DishaSetu AI's Stage 1 Answer Validity Judge.
+Your ONLY responsibility is to determine: "Does this candidate response actually attempt to provide a meaningful answer to the technical question?"
+Do NOT calculate a numerical score.
+
+TARGET ROLE: ${role}
+SKILL: ${skill}
+INTERVIEW QUESTION: "${questionText}"
+
+CANDIDATE ACTUAL ANSWER:
+"""${studentAnswer}"""
+
+DECISION RULES FOR STAGE 1:
+Return validity = "INSUFFICIENT" (and isMeaningfulAnswer = false) if the candidate:
+1. Writes "abc", "xyz", random gibberish, or single-character spam.
+2. Says "I don't know", "no idea", "not know the answer", "cannot answer", "not sure", or equivalents.
+3. Gives off-topic personal introductions or irrelevant filler (e.g., "My name is Rahul and I am a B.Tech student").
+4. Repeats or paraphrases the question without providing an answer.
+5. Copies the question and merely appends agreement words (e.g., "Explain INNER JOIN... yeah it is right i am agree with our point", "yes", "I agree", "correct").
+6. Lists keywords without conceptual explanation or propositional content.
+7. Provides filler padding or a long response containing no actual explanation.
+
+Return validity = "VALID" or "PARTIAL" (and isMeaningfulAnswer = true) ONLY if the candidate provides NEW technical information and explanation addressing the question.
+
+Return STRICT JSON matching this schema:
+{
+  "isMeaningfulAnswer": true | false,
+  "isQuestionRestatement": true | false,
+  "isOffTopic": true | false,
+  "isExplicitUnknown": true | false,
+  "isKeywordSpam": true | false,
+  "validity": "VALID" | "PARTIAL" | "INSUFFICIENT",
+  "reason": "Clear concise reason for validity verdict."
+}`;
+
+  for (const model of models) {
+    try {
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      const response = await fetch(geminiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.0,
+            responseMimeType: 'application/json',
+          },
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const candidateText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (candidateText) {
+          const parsed = JSON.parse(candidateText);
+          if (parsed && typeof parsed.validity === 'string') {
+            const valUpper = parsed.validity.toUpperCase();
+            const validity = (valUpper === 'VALID' || valUpper === 'PARTIAL') ? valUpper : 'INSUFFICIENT';
+            return {
+              isMeaningfulAnswer: parsed.isMeaningfulAnswer === true && validity !== 'INSUFFICIENT',
+              isQuestionRestatement: parsed.isQuestionRestatement === true,
+              isOffTopic: parsed.isOffTopic === true,
+              isExplicitUnknown: parsed.isExplicitUnknown === true,
+              isKeywordSpam: parsed.isKeywordSpam === true,
+              validity,
+              reason: parsed.reason || (validity === 'INSUFFICIENT' ? 'The response does not meaningfully answer the question.' : 'Valid technical response.'),
+            };
+          }
+        }
+      }
+    } catch (modelErr) {
+      console.warn(`Gemini validity judge (${model}) failed:`, modelErr.message);
+    }
+  }
+
+  return null;
+};
+
+/**
+ * STAGE 2 AI CALL: Dedicated Gemini Answer Quality Scorer
+ * ONLY executed if Stage 1 validity is VALID or PARTIAL.
+ * Evaluates technical correctness, completeness, depth, and clarity.
+ */
+export const callGeminiQualityScorer = async (
   questionText,
   studentAnswer,
   role = 'Data Analyst',
@@ -402,62 +665,38 @@ export const callGeminiAnswerEvaluation = async (
     'gemini-pro',
   ];
 
-  const prompt = `You are DishaSetu AI's Strict Senior Technical Interview Evaluator.
-Evaluate the candidate's actual answer for the following technical question.
+  const prompt = `You are DishaSetu AI's Stage 2 Technical Answer Quality Scorer.
+This response has ALREADY been verified by Stage 1 as a genuine answer attempt.
+Now evaluate the technical quality, correctness, depth, and clarity.
 
 TARGET ROLE: ${role}
 SKILL BEING EVALUATED: ${skill}
 INTERVIEW QUESTION: "${questionText}"
-EXPECTED CONCEPTS / RUBRIC: "${expectedRubric || 'Technically accurate concept definition, practical mechanisms, and trade-offs.'}"
+EXPECTED CONCEPTS / RUBRIC: "${expectedRubric || 'Accurate concept definitions, practical mechanisms, and trade-offs.'}"
 
 CANDIDATE ACTUAL ANSWER:
 """${studentAnswer}"""
 
-MANDATORY EVALUATION RULES (APPLY IN STRICT ORDER):
+SCORING CRITERIA (0 - 100 each):
+- relevance (25% weight): How directly and accurately does this answer address the question?
+- technicalAccuracy (30% weight): Are technical claims, syntax, mechanisms, and facts correct?
+- completeness (20% weight): Did the candidate cover the major parts of the rubric?
+- depth (15% weight): Does the answer demonstrate deep understanding vs superficial buzzwords?
+- communicationClarity (10% weight): Is the technical explanation structured and easy to follow?
 
-STAGE 1: ANSWER VALIDITY GATE (CRITICAL)
-- Determine answerStatus: "VALID" | "PARTIAL" | "INSUFFICIENT".
-- If the candidate writes:
-  * "abc", gibberish, empty, or single-character spam
-  * "I don't know", "no idea", "not know the answer", or equivalents
-  * Off-topic personal introductions (e.g. talking about college/hobbies/unrelated tech)
-  * Random filler, intentional padding, or repeated words
-  * Keyword spam without explanatory structure
-  THEN IMMEDIATELY RETURN:
-  * answerStatus: "INSUFFICIENT"
-  * score: 0
-  * relevance: 0
-  * technicalAccuracy: 0
-  * completeness: 0
-  * depth: 0
-  * communicationClarity: 0
-  * verdict: "incorrect"
-  * skillEvidence: "insufficient"
-  * strengths: [] (STRICTLY EMPTY ARRAY - NEVER invent fake strengths for invalid answers!)
-  * weaknesses: ["The response does not address the interview question."]
-
-STAGE 2: QUALITY SCORING FOR VALID/PARTIAL ANSWERS ONLY
-- Formula:
-  Score = (relevance * 0.25 + technicalAccuracy * 0.30 + completeness * 0.20 + depth * 0.15 + communicationClarity * 0.10)
-- Answer length or word count MUST NEVER increase scores.
-- "communicationClarity": Measures technical explanation clarity, NOT generic English readability.
-
-Return JSON ONLY matching this schema:
+Return STRICT JSON matching this schema:
 {
-  "answerStatus": "VALID | PARTIAL | INSUFFICIENT",
-  "score": 0,
-  "verdict": "excellent | good | partial | needs_improvement | incorrect",
-  "relevance": 0,
-  "technicalAccuracy": 0,
-  "completeness": 0,
-  "depth": 0,
-  "communicationClarity": 0,
-  "feedback": "Honest 1-2 sentence evaluation.",
-  "strengths": [],
-  "weaknesses": [],
+  "relevance": 0-100,
+  "technicalAccuracy": 0-100,
+  "completeness": 0-100,
+  "depth": 0-100,
+  "communicationClarity": 0-100,
+  "skillEvidence": "strong" | "moderate" | "insufficient",
+  "feedback": "Concise 1-2 sentence constructive feedback.",
+  "strengths": ["..."],
+  "weaknesses": ["..."],
   "howToImprove": ["..."],
-  "betterApproach": "...",
-  "skillEvidence": "strong | moderate | insufficient"
+  "betterApproach": "..."
 }`;
 
   for (const model of models) {
@@ -481,90 +720,32 @@ Return JSON ONLY matching this schema:
         if (candidateText) {
           const parsed = JSON.parse(candidateText);
           if (parsed) {
-            const answerStatus = parsed.answerStatus === 'VALID' || parsed.answerStatus === 'PARTIAL' ? parsed.answerStatus : 'INSUFFICIENT';
-
-            if (answerStatus === 'INSUFFICIENT') {
-              return {
-                answerStatus: 'INSUFFICIENT',
-                score: 0,
-                verdict: 'incorrect',
-                skillEvidence: 'insufficient',
-                feedback: parsed.feedback || 'The response does not provide a meaningful answer to the question.',
-                strengths: [],
-                whatWentWell: [],
-                weaknesses: ['The response does not address the interview question.'],
-                howToImprove: Array.isArray(parsed.howToImprove) && parsed.howToImprove.length > 0 ? parsed.howToImprove.slice(0, 2) : [
-                  `Directly answer the question using technical principles of ${skill}.`,
-                  'Explain the core concept definitions and give practical use cases.',
-                ],
-                betterApproach: parsed.betterApproach || expectedRubric || 'Define the key concepts and provide a concrete production example.',
-                scores: {
-                  technicalAccuracy: 0,
-                  completeness: 0,
-                  clarity: 0,
-                  communicationClarity: 0,
-                  relevance: 0,
-                  depth: 0,
-                  correctness: 0,
-                  overall: 0,
-                },
-              };
-            }
-
             const relevance = Math.min(100, Math.max(0, typeof parsed.relevance === 'number' ? parsed.relevance : 0));
             const technicalAccuracy = Math.min(100, Math.max(0, typeof parsed.technicalAccuracy === 'number' ? parsed.technicalAccuracy : 0));
             const completeness = Math.min(100, Math.max(0, typeof parsed.completeness === 'number' ? parsed.completeness : 0));
             const depth = Math.min(100, Math.max(0, typeof parsed.depth === 'number' ? parsed.depth : technicalAccuracy));
             const communicationClarity = Math.min(100, Math.max(0, typeof parsed.communicationClarity === 'number' ? parsed.communicationClarity : 0));
 
-            // Backend Scoring Formula
-            let overall = Math.round(
-              relevance * 0.25 +
-              technicalAccuracy * 0.30 +
-              completeness * 0.20 +
-              depth * 0.15 +
-              communicationClarity * 0.10
-            );
-
-            // Backend Override Rule: If relevance is very low or technical accuracy is very low, score must be 0
-            if (relevance < 20 || technicalAccuracy < 20) {
-              overall = 0;
-            }
-
-            const verdict = overall >= 85 ? 'excellent' : overall >= 70 ? 'good' : overall >= 50 ? 'partial' : overall > 0 ? 'needs_improvement' : 'incorrect';
-            const skillEvidence = overall >= 75 && relevance >= 70 ? 'strong' : overall >= 60 && relevance >= 50 ? 'moderate' : 'insufficient';
-            const strengths = overall >= 60 && Array.isArray(parsed.strengths) ? parsed.strengths.slice(0, 2) : [];
-
             return {
-              answerStatus,
-              score: overall,
-              verdict,
-              skillEvidence,
-              feedback: parsed.feedback || (overall >= 70 ? `Accurate explanation demonstrating clear understanding of ${skill}.` : `Evaluated for ${skill} technical accuracy.`),
-              strengths,
-              whatWentWell: strengths,
+              relevance,
+              technicalAccuracy,
+              completeness,
+              depth,
+              communicationClarity,
+              feedback: parsed.feedback || `Evaluated for ${skill} technical accuracy.`,
+              strengths: Array.isArray(parsed.strengths) ? parsed.strengths.slice(0, 2) : [],
               weaknesses: Array.isArray(parsed.weaknesses) ? parsed.weaknesses.slice(0, 2) : [],
               howToImprove: Array.isArray(parsed.howToImprove) && parsed.howToImprove.length > 0 ? parsed.howToImprove.slice(0, 2) : [
                 `Review ${skill} core mechanics: ${expectedRubric.slice(0, 100)}...`,
                 'Ground theoretical points with concrete production examples.',
               ],
               betterApproach: parsed.betterApproach || expectedRubric || 'Provide definitions and explain how it operates in real-world systems.',
-              scores: {
-                technicalAccuracy,
-                completeness,
-                clarity: communicationClarity,
-                communicationClarity,
-                relevance,
-                depth,
-                correctness: technicalAccuracy,
-                overall,
-              },
             };
           }
         }
       }
     } catch (modelErr) {
-      console.warn(`Gemini (${model}) call failed, trying next model:`, modelErr.message);
+      console.warn(`Gemini quality scorer (${model}) failed:`, modelErr.message);
     }
   }
 
@@ -572,67 +753,32 @@ Return JSON ONLY matching this schema:
 };
 
 /**
- * Strict Semantic Evaluator (Deterministic offline evaluator based on actual concept understanding)
+ * Deterministic Semantic Quality Scorer (Offline fallback when Gemini is unavailable)
+ * Evaluates semantic concept overlap against EXPECTED RUBRIC (not question text).
  */
 export const evaluateSemantically = (questionText, studentAnswer, role, skill, expectedRubric) => {
   const cleanAnswer = studentAnswer.trim();
   const lowerAnswer = cleanAnswer.toLowerCase();
 
-  // STAGE 1: Validity Gate
-  const validity = determineAnswerValidity(cleanAnswer, questionText, expectedRubric);
-  if (validity.answerStatus === 'INSUFFICIENT') {
-    return {
-      answerStatus: 'INSUFFICIENT',
-      score: 0,
-      verdict: 'incorrect',
-      skillEvidence: 'insufficient',
-      feedback: validity.reason || 'The response does not provide a meaningful answer to the question.',
-      strengths: [],
-      whatWentWell: [],
-      weaknesses: ['The response does not address the interview question.'],
-      howToImprove: [
-        `Directly answer the question using technical definitions and principles of ${skill}.`,
-        'Explain the core concept definitions and give practical use cases.',
-      ],
-      betterApproach: expectedRubric || 'Define the key concepts and provide a concrete production example.',
-      scores: {
-        technicalAccuracy: 0,
-        completeness: 0,
-        clarity: 0,
-        communicationClarity: 0,
-        relevance: 0,
-        depth: 0,
-        correctness: 0,
-        overall: 0,
-      },
-    };
-  }
-
-  // STAGE 2: Quality Evaluation
-  const combinedText = `${questionText} ${expectedRubric || ''}`;
   const stopWords = new Set([
     'what', 'explain', 'difference', 'between', 'with', 'from', 'this', 'that', 'they',
     'does', 'your', 'about', 'when', 'which', 'where', 'have', 'been', 'should', 'would',
     'could', 'into', 'some', 'more', 'also', 'such', 'like', 'than', 'them', 'these', 'those'
   ]);
 
-  const rawTokens = combinedText
+  // Tokenize the expected rubric (semantic concepts)
+  const rawRubricTokens = (expectedRubric || '')
     .toLowerCase()
     .replace(/[^\w\s]/g, ' ')
     .split(/\s+/)
     .filter((w) => w.length >= 4 && !stopWords.has(w));
-  const uniqueTokens = Array.from(new Set(rawTokens));
+  const uniqueRubricTokens = Array.from(new Set(rawRubricTokens));
 
-  const matchedTokens = uniqueTokens.filter((token) => {
+  const matchedTokens = uniqueRubricTokens.filter((token) => {
     const stem = token.length > 5 ? token.slice(0, 5) : token;
     return lowerAnswer.includes(token) || lowerAnswer.includes(stem);
   });
-  const matchRatio = uniqueTokens.length > 0 ? matchedTokens.length / uniqueTokens.length : 0;
-
-  // Detect fact inversions
-  const hasInversion =
-    (lowerAnswer.includes('inner join') && lowerAnswer.includes('all rows from') && !lowerAnswer.includes('left join returns all')) ||
-    (lowerAnswer.includes('mean is not sensitive') || lowerAnswer.includes('median is sensitive'));
+  const matchRatio = uniqueRubricTokens.length > 0 ? matchedTokens.length / uniqueRubricTokens.length : 0;
 
   const explanatoryTokens = [
     'is', 'are', 'was', 'were', 'returns', 'preserves', 'calculates', 'allows', 'without',
@@ -651,13 +797,7 @@ export const evaluateSemantically = (questionText, studentAnswer, role, skill, e
   let depth = 0;
   let communicationClarity = 0;
 
-  if (hasInversion) {
-    relevance = 50;
-    technicalAccuracy = 20;
-    completeness = 25;
-    depth = 20;
-    communicationClarity = 40;
-  } else if (matchRatio >= 0.28 && hasExplanatoryGrammar) {
+  if (matchRatio >= 0.28 && hasExplanatoryGrammar) {
     // High-quality comprehensive answer
     relevance = 90;
     technicalAccuracy = Math.min(95, 75 + Math.round(matchRatio * 20));
@@ -679,60 +819,38 @@ export const evaluateSemantically = (questionText, studentAnswer, role, skill, e
     depth = 40;
     communicationClarity = 60;
   } else {
-    relevance = 0;
-    technicalAccuracy = 0;
-    completeness = 0;
-    depth = 0;
-    communicationClarity = 0;
+    relevance = 30;
+    technicalAccuracy = 20;
+    completeness = 20;
+    depth = 15;
+    communicationClarity = 40;
   }
 
-  // Final Quality Score Formula
-  const overall = Math.round(
-    relevance * 0.25 +
-    technicalAccuracy * 0.30 +
-    completeness * 0.20 +
-    depth * 0.15 +
-    communicationClarity * 0.10
-  );
-
-  const verdict = overall >= 85 ? 'excellent' : overall >= 70 ? 'good' : overall >= 50 ? 'partial' : overall > 0 ? 'needs_improvement' : 'incorrect';
-  const skillEvidence = overall >= 75 && relevance >= 70 ? 'strong' : overall >= 60 && relevance >= 50 ? 'moderate' : 'insufficient';
-  const strengths = overall >= 60 ? [`Demonstrated accurate understanding of ${skill} concepts.`] : [];
-
   return {
-    answerStatus: validity.answerStatus,
-    score: overall,
-    verdict,
-    skillEvidence,
-    feedback:
-      overall >= 70
-        ? `Accurate explanation demonstrating clear understanding of ${skill}.`
-        : overall >= 50
-        ? `Partially correct explanation, but lacks key technical details for ${skill}.`
-        : `The response does not provide a meaningful answer to the question.`,
-    strengths,
-    whatWentWell: strengths,
-    weaknesses: overall < 60 ? [`Lacks technical depth for ${skill}.`] : [],
+    relevance,
+    technicalAccuracy,
+    completeness,
+    depth,
+    communicationClarity,
+    feedback: technicalAccuracy >= 70
+      ? `Accurate explanation demonstrating clear understanding of ${skill}.`
+      : `Partially addressed ${skill} principles, but needs more technical depth.`,
+    strengths: technicalAccuracy >= 60 ? [`Demonstrated understanding of ${skill} concepts.`] : [],
+    weaknesses: technicalAccuracy < 60 ? [`Lacks technical depth for ${skill}.`] : [],
     howToImprove: [
       `Review ${skill} core mechanics: ${expectedRubric.slice(0, 100)}...`,
       'Ground theoretical points with concrete production examples.',
     ],
     betterApproach: expectedRubric || 'Provide definitions and explain how it operates in real-world systems.',
-    scores: {
-      technicalAccuracy,
-      completeness,
-      clarity: communicationClarity,
-      communicationClarity,
-      relevance,
-      depth,
-      correctness: technicalAccuracy,
-      overall,
-    },
   };
 };
 
 /**
- * Main Evaluation Orchestrator: Validates -> Calls Gemini -> Falls back to Strict Semantic Evaluator
+ * Main Evaluation Orchestrator:
+ * Executes Two-Stage Evaluation Pipeline:
+ * STAGE 1: Answer Validity Judge (AI + Deterministic Gate)
+ * If INSUFFICIENT -> Stage 2 is NEVER called; immediately returns 0/100, incorrect, insufficient evidence.
+ * If VALID/PARTIAL -> STAGE 2: Answer Quality Scorer computes weighted score and skill evidence.
  */
 export const evaluateStudentAnswer = async (
   questionText,
@@ -747,26 +865,68 @@ export const evaluateStudentAnswer = async (
 
   const cleanAnswer = studentAnswer.trim();
 
-  // Find matching question rubric from curated banks
-  const rolePool = ROLE_SKILL_QUESTIONS[role] || ROLE_SKILL_QUESTIONS['Data Analyst'] || [];
-  const matchedQ = rolePool.find((q) => q.text.trim().toLowerCase() === questionText.trim().toLowerCase());
+  // Find matching question rubric from DB or curated taxonomy
+  let matchedQ = null;
+  try {
+    matchedQ = await InterviewQuestion.findOne({ questionText: questionText.trim(), isActive: true });
+  } catch (err) {
+    // ignore
+  }
+
+  if (!matchedQ) {
+    const rolePool = ROLE_SKILL_QUESTIONS[role] || ROLE_SKILL_QUESTIONS['Data Analyst'] || [];
+    matchedQ = rolePool.find((q) => q.text.trim().toLowerCase() === questionText.trim().toLowerCase());
+  }
+
   const skill = normalizeSkillName(matchedQ?.skill) || 'Technical';
   const expectedRubric = matchedQ?.expectedRubric || `Accurate technical explanation for ${questionText}`;
 
-  // STAGE 1: Deterministic Validity Gate
-  const validity = determineAnswerValidity(cleanAnswer, questionText, expectedRubric);
-  if (validity.answerStatus === 'INSUFFICIENT') {
+  // =========================================================================
+  // STAGE 1: ANSWER VALIDITY JUDGE
+  // =========================================================================
+  
+  // 1. Run deterministic / algorithmic heuristic validity check first
+  const deterministicValidity = determineAnswerValidity(cleanAnswer, questionText, expectedRubric);
+
+  let validityResult = deterministicValidity;
+
+  // If deterministic check deemed it insufficient (e.g. echo copy + agreement, gibberish, "i don't know"),
+  // we do not need to call AI validity judge.
+  // Otherwise, if Gemini is available, verify with Gemini Validity Judge
+  if (deterministicValidity.answerStatus !== 'INSUFFICIENT') {
+    const aiValidity = await callGeminiValidityJudge(questionText, cleanAnswer, role, skill);
+    if (aiValidity) {
+      validityResult = {
+        isMeaningfulAnswer: aiValidity.isMeaningfulAnswer,
+        isQuestionRestatement: aiValidity.isQuestionRestatement,
+        isOffTopic: aiValidity.isOffTopic,
+        isExplicitUnknown: aiValidity.isExplicitUnknown,
+        isKeywordSpam: aiValidity.isKeywordSpam,
+        answerStatus: aiValidity.validity,
+        reason: aiValidity.reason || deterministicValidity.reason,
+      };
+    }
+  }
+
+  // =========================================================================
+  // HARD BACKEND OVERRIDE FOR INSUFFICIENT ANSWERS
+  // Stage 2 MUST NEVER run for INSUFFICIENT answers!
+  // =========================================================================
+  if (validityResult.answerStatus === 'INSUFFICIENT' || !validityResult.isMeaningfulAnswer) {
     return {
       answerStatus: 'INSUFFICIENT',
+      isMeaningfulAnswer: false,
+      isQuestionRestatement: validityResult.isQuestionRestatement || false,
+      validityReason: validityResult.reason || 'The response does not provide a meaningful answer to the interview question.',
       score: 0,
       verdict: 'incorrect',
       skillEvidence: 'insufficient',
-      feedback: validity.reason || 'The response does not provide a meaningful answer to the question.',
+      feedback: validityResult.reason || 'The response does not provide a meaningful answer to the interview question.',
       strengths: [],
       whatWentWell: [],
-      weaknesses: ['The response does not address the interview question.'],
+      weaknesses: ['The response does not meaningfully address the question.'],
       howToImprove: [
-        `Directly answer the question using technical definitions and principles of ${skill}.`,
+        `Directly answer the question using technical principles of ${skill}.`,
         'Explain the core concept definitions and give practical use cases.',
       ],
       betterApproach: expectedRubric || 'State the core concept definition, explain how it works under the hood, and give one practical example.',
@@ -783,8 +943,11 @@ export const evaluateStudentAnswer = async (
     };
   }
 
-  // STAGE 2: Call Google Gemini with strict prompt
-  const geminiEval = await callGeminiAnswerEvaluation(
+  // =========================================================================
+  // STAGE 2: ANSWER QUALITY SCORER
+  // (Only executed for VALID or PARTIAL answers)
+  // =========================================================================
+  let qualityResult = await callGeminiQualityScorer(
     questionText,
     cleanAnswer,
     role,
@@ -792,11 +955,69 @@ export const evaluateStudentAnswer = async (
     expectedRubric
   );
 
-  if (geminiEval) {
-    return geminiEval;
+  if (!qualityResult) {
+    // Fallback to deterministic semantic quality scorer
+    qualityResult = evaluateSemantically(questionText, cleanAnswer, role, skill, expectedRubric);
   }
 
-  // Fallback to strict semantic evaluator
-  return evaluateSemantically(questionText, cleanAnswer, role, skill, expectedRubric);
+  // Calculate final score using the strict weighted formula:
+  // Relevance (25%) + Technical Accuracy (30%) + Completeness (20%) + Depth (15%) + Clarity (10%)
+  const relevance = Math.min(100, Math.max(0, qualityResult.relevance || 0));
+  const technicalAccuracy = Math.min(100, Math.max(0, qualityResult.technicalAccuracy || 0));
+  const completeness = Math.min(100, Math.max(0, qualityResult.completeness || 0));
+  const depth = Math.min(100, Math.max(0, qualityResult.depth || technicalAccuracy));
+  const communicationClarity = Math.min(100, Math.max(0, qualityResult.communicationClarity || 0));
+
+  let overall = Math.round(
+    relevance * 0.25 +
+    technicalAccuracy * 0.30 +
+    completeness * 0.20 +
+    depth * 0.15 +
+    communicationClarity * 0.10
+  );
+
+  // Backend Hard Override Rule: If relevance < 25 or technicalAccuracy < 25, score MUST be 0
+  if (relevance < 25 || technicalAccuracy < 25) {
+    overall = 0;
+  }
+
+  const verdict = overall >= 85 ? 'excellent' : overall >= 70 ? 'good' : overall >= 50 ? 'partial' : overall > 0 ? 'needs_improvement' : 'incorrect';
+  const skillEvidence = overall >= 75 && relevance >= 70 ? 'strong' : overall >= 60 && relevance >= 50 ? 'moderate' : 'insufficient';
+  const strengths = overall >= 60 && Array.isArray(qualityResult.strengths) ? qualityResult.strengths.slice(0, 2) : [];
+  const weaknesses = overall < 70 && Array.isArray(qualityResult.weaknesses) && qualityResult.weaknesses.length > 0
+    ? qualityResult.weaknesses.slice(0, 2)
+    : overall < 70
+    ? [`Could provide deeper technical detail and production use cases for ${skill}.`]
+    : [];
+
+  return {
+    answerStatus: validityResult.answerStatus,
+    isMeaningfulAnswer: true,
+    isQuestionRestatement: false,
+    validityReason: validityResult.reason || '',
+    score: overall,
+    verdict,
+    skillEvidence,
+    feedback: qualityResult.feedback || (overall >= 70 ? `Accurate explanation demonstrating clear understanding of ${skill}.` : `Evaluated for ${skill} technical accuracy.`),
+    strengths,
+    whatWentWell: strengths,
+    weaknesses,
+    howToImprove: Array.isArray(qualityResult.howToImprove) && qualityResult.howToImprove.length > 0 ? qualityResult.howToImprove.slice(0, 2) : [
+      `Review ${skill} core mechanics: ${expectedRubric.slice(0, 100)}...`,
+      'Ground theoretical points with concrete production examples.',
+    ],
+    betterApproach: qualityResult.betterApproach || expectedRubric || 'Provide definitions and explain how it operates in real-world systems.',
+    scores: {
+      technicalAccuracy,
+      completeness,
+      clarity: communicationClarity,
+      communicationClarity,
+      relevance,
+      depth,
+      correctness: technicalAccuracy,
+      overall,
+    },
+  };
 };
+
 

@@ -18,7 +18,7 @@ import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
 import { Card } from '../components/common/Card';
 
-const POPULAR_SKILLS = [
+const DEFAULT_POPULAR_SKILLS = [
   'React',
   'Node.js',
   'JavaScript',
@@ -33,7 +33,7 @@ const POPULAR_SKILLS = [
   'Express.js',
 ];
 
-const TARGET_ROLES = [
+const DEFAULT_TARGET_ROLES = [
   'Full Stack Developer',
   'Frontend Developer',
   'Backend Developer',
@@ -49,6 +49,11 @@ export const OnboardingPage = () => {
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+
+  // Dynamic Meta Options fetched from database
+  const [educations, setEducations] = useState([]);
+  const [targetRoles, setTargetRoles] = useState(DEFAULT_TARGET_ROLES);
+  const [availableSkills, setAvailableSkills] = useState(DEFAULT_POPULAR_SKILLS);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -74,6 +79,32 @@ export const OnboardingPage = () => {
     internshipInput: '',
     certificationInput: 'NPTEL / Swayam Web Fundamentals',
   });
+
+  // Fetch active degrees, target roles, and skills on mount
+  React.useEffect(() => {
+    const loadMeta = async () => {
+      try {
+        const res = await (await import('../utils/api')).default.get('/meta/options');
+        if (res.data?.success) {
+          if (Array.isArray(res.data.education) && res.data.education.length > 0) {
+            setEducations(res.data.education);
+            if (!formData.degree) {
+              setFormData((prev) => ({ ...prev, degree: res.data.education[0].name }));
+            }
+          }
+          if (Array.isArray(res.data.targetRoles) && res.data.targetRoles.length > 0) {
+            setTargetRoles(res.data.targetRoles);
+          }
+          if (Array.isArray(res.data.skills) && res.data.skills.length > 0) {
+            setAvailableSkills(res.data.skills.slice(0, 15));
+          }
+        }
+      } catch (err) {
+        console.warn('Meta options load note:', err.message);
+      }
+    };
+    loadMeta();
+  }, []);
 
   const handleNext = (e) => {
     e.preventDefault();
@@ -273,34 +304,59 @@ export const OnboardingPage = () => {
                       </label>
                       <select
                         value={formData.degree}
-                        onChange={(e) => setFormData({ ...formData, degree: e.target.value })}
+                        onChange={(e) => {
+                          const newDeg = e.target.value;
+                          const found = educations.find((ed) => ed.name === newDeg);
+                          const firstSpec = found?.specializations?.[0] || 'Computer Science & Engineering';
+                          setFormData({ ...formData, degree: newDeg, branch: firstSpec });
+                        }}
                         className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
                       >
-                        <option>B.Tech / B.E.</option>
-                        <option>BCA</option>
-                        <option>MCA</option>
-                        <option>B.Sc (CS / IT)</option>
-                        <option>Diploma / Polytechnic</option>
-                        <option>Other Graduation</option>
+                        {educations.length > 0 ? (
+                          educations.map((ed) => (
+                            <option key={ed._id || ed.name} value={ed.name}>
+                              {ed.name}
+                            </option>
+                          ))
+                        ) : (
+                          <>
+                            <option>B.Tech / B.E.</option>
+                            <option>BCA</option>
+                            <option>MCA</option>
+                            <option>B.Sc (CS / IT)</option>
+                            <option>Diploma / Polytechnic</option>
+                            <option>Other Graduation</option>
+                          </>
+                        )}
                       </select>
                     </div>
 
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                        Branch / Stream
+                        Branch / Specialization
                       </label>
                       <select
                         value={formData.branch}
                         onChange={(e) => setFormData({ ...formData, branch: e.target.value })}
                         className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
                       >
-                        <option>Computer Science & Engineering</option>
-                        <option>Information Technology</option>
-                        <option>Artificial Intelligence & Data Science</option>
-                        <option>Electronics & Communication</option>
-                        <option>Electrical Engineering</option>
-                        <option>Mechanical / Civil</option>
-                        <option>Non-Tech / Other</option>
+                        {(() => {
+                          const currEd = educations.find((ed) => ed.name === formData.degree);
+                          const specs = currEd?.specializations?.length ? currEd.specializations : [
+                            'Computer Science & Engineering',
+                            'Information Technology',
+                            'Artificial Intelligence & Data Science',
+                            'Electronics & Communication',
+                            'Electrical Engineering',
+                            'Mechanical / Civil',
+                            'General / Non-Tech'
+                          ];
+                          return specs.map((sp) => (
+                            <option key={sp} value={sp}>
+                              {sp}
+                            </option>
+                          ));
+                        })()}
                       </select>
                     </div>
                   </div>
@@ -400,7 +456,7 @@ export const OnboardingPage = () => {
                       Target Role
                     </label>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      {TARGET_ROLES.map((role) => {
+                      {targetRoles.map((role) => {
                         const isSelected = formData.targetRole === role;
                         return (
                           <div
@@ -463,7 +519,7 @@ export const OnboardingPage = () => {
                       Popular Skills (Click to select)
                     </label>
                     <div className="flex flex-wrap gap-2 mb-3">
-                      {POPULAR_SKILLS.map((skill) => {
+                      {availableSkills.map((skill) => {
                         const isSelected = formData.currentSkills.includes(skill);
                         return (
                           <button

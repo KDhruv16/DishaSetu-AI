@@ -12,6 +12,9 @@ const questionSchema = new mongoose.Schema(
       enum: ['VALID', 'PARTIAL', 'INSUFFICIENT', 'UNANSWERED'],
       default: 'UNANSWERED',
     },
+    isMeaningfulAnswer: { type: Boolean, default: false },
+    isQuestionRestatement: { type: Boolean, default: false },
+    validityReason: { type: String, default: '' },
     verdict: {
       type: String,
       enum: ['excellent', 'good', 'partial', 'needs_improvement', 'incorrect', 'unanswered'],

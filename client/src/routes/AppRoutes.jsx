@@ -17,6 +17,21 @@ import { AnalyticsPage } from '../pages/AnalyticsPage';
 import { ProtectedRoute } from '../components/common/ProtectedRoute';
 import { AppLayout } from '../components/layout/AppLayout';
 
+// Admin Module Components & Pages
+import { AdminRoute } from '../components/admin/AdminRoute';
+import { AdminLayout } from '../components/admin/AdminLayout';
+import { AdminLoginPage } from '../pages/admin/AdminLoginPage';
+import { AdminDashboardPage } from '../pages/admin/AdminDashboardPage';
+import { AdminEducationPage } from '../pages/admin/AdminEducationPage';
+import { AdminRolesPage } from '../pages/admin/AdminRolesPage';
+import { AdminSkillsPage } from '../pages/admin/AdminSkillsPage';
+import { AdminRoleSkillsPage } from '../pages/admin/AdminRoleSkillsPage';
+import { AdminQuestionsPage } from '../pages/admin/AdminQuestionsPage';
+import { AdminLearningPage } from '../pages/admin/AdminLearningPage';
+import { AdminRoadmapsPage } from '../pages/admin/AdminRoadmapsPage';
+import { AdminUsersPage } from '../pages/admin/AdminUsersPage';
+import { AdminSettingsPage } from '../pages/admin/AdminSettingsPage';
+
 export const AppRoutes = () => {
   return (
     <Routes>
@@ -24,12 +39,13 @@ export const AppRoutes = () => {
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/admin/login" element={<AdminLoginPage />} />
 
-      {/* Protected Onboarding */}
+      {/* Candidate Protected Flow */}
       <Route element={<ProtectedRoute />}>
         <Route path="/onboarding" element={<OnboardingPage />} />
 
-        {/* Protected Dashboard & App Layout */}
+        {/* Candidate Dashboard & App Layout */}
         <Route element={<AppLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/analytics" element={<AnalyticsPage />} />
@@ -44,10 +60,27 @@ export const AppRoutes = () => {
         </Route>
       </Route>
 
+      {/* Admin Protected Portal */}
+      <Route element={<AdminRoute />}>
+        <Route element={<AdminLayout />}>
+          <Route path="/admin" element={<AdminDashboardPage />} />
+          <Route path="/admin/education" element={<AdminEducationPage />} />
+          <Route path="/admin/roles" element={<AdminRolesPage />} />
+          <Route path="/admin/skills" element={<AdminSkillsPage />} />
+          <Route path="/admin/role-skills" element={<AdminRoleSkillsPage />} />
+          <Route path="/admin/questions" element={<AdminQuestionsPage />} />
+          <Route path="/admin/learning" element={<AdminLearningPage />} />
+          <Route path="/admin/roadmaps" element={<AdminRoadmapsPage />} />
+          <Route path="/admin/users" element={<AdminUsersPage />} />
+          <Route path="/admin/settings" element={<AdminSettingsPage />} />
+        </Route>
+      </Route>
+
       {/* Catch-all fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 };
+
 
 
