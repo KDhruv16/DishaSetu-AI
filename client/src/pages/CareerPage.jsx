@@ -20,7 +20,7 @@ import { AiLoadingAnimation } from '../components/common/AiLoadingAnimation';
 import api from '../utils/api';
 
 export const CareerPage = () => {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
 
   const [analysis, setAnalysis] = useState(null);
@@ -38,14 +38,43 @@ export const CareerPage = () => {
 
       const res = await api.get('/ai/career-analysis');
       if (res.data?.incomplete) {
+        const isUserOnboarded = user?.isOnboarded || !!profile?.career?.targetRole || !!profile?.targetRole;
+        if (isUserOnboarded) {
+          const refreshRes = await api.post('/ai/career-analysis');
+          if (refreshRes.data?.success && refreshRes.data.analysis) {
+            setAnalysis(refreshRes.data.analysis);
+            setIsIncomplete(false);
+            return;
+          }
+        }
         setIsIncomplete(true);
       } else if (res.data?.success && res.data.analysis) {
         setAnalysis(res.data.analysis);
       } else {
+        const isUserOnboarded = user?.isOnboarded || !!profile?.career?.targetRole || !!profile?.targetRole;
+        if (isUserOnboarded) {
+          const refreshRes = await api.post('/ai/career-analysis');
+          if (refreshRes.data?.success && refreshRes.data.analysis) {
+            setAnalysis(refreshRes.data.analysis);
+            setIsIncomplete(false);
+            return;
+          }
+        }
         setError(res.data?.message || "Career analysis couldn't be completed right now.");
       }
     } catch (err) {
       console.error('Fetch career analysis error:', err);
+      const isUserOnboarded = user?.isOnboarded || !!profile?.career?.targetRole || !!profile?.targetRole;
+      if (isUserOnboarded) {
+        try {
+          const refreshRes = await api.post('/ai/career-analysis');
+          if (refreshRes.data?.success && refreshRes.data.analysis) {
+            setAnalysis(refreshRes.data.analysis);
+            setIsIncomplete(false);
+            return;
+          }
+        } catch (_) {}
+      }
       setError("Career analysis couldn't be completed right now.");
     } finally {
       setLoading(false);
@@ -60,6 +89,7 @@ export const CareerPage = () => {
       const res = await api.post('/ai/career-analysis');
       if (res.data?.success && res.data.analysis) {
         setAnalysis(res.data.analysis);
+        setIsIncomplete(false);
       } else {
         setError(res.data?.message || "Career analysis couldn't be completed right now.");
       }

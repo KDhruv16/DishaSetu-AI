@@ -7,11 +7,15 @@ import { calculateReadinessScore } from '../services/readinessService.js';
 import { normalizeSkillName, ROLE_SKILL_BENCHMARKS } from '../utils/skillNormalization.js';
 
 // Helper to validate profile completeness
-const isProfileComplete = (profile) => {
+const isProfileComplete = (profile, user) => {
+  if (user?.isOnboarded) return true;
   if (!profile) return false;
-  const hasTarget = !!profile.career?.targetRole;
-  const hasSkills = Array.isArray(profile.skills?.currentSkills) && profile.skills.currentSkills.length > 0;
-  return hasTarget && hasSkills;
+  const hasTarget = !!profile.career?.targetRole || !!profile.targetRole || !!user?.targetRole;
+  const hasPersonal = !!profile.personal?.name || !!profile.personal?.degree || !!profile.degree;
+  const hasAcademics = !!profile.academics?.degree || !!profile.academics?.branch || !!profile.academics?.semester;
+  const hasSkills = (Array.isArray(profile.skills?.currentSkills) && profile.skills.currentSkills.length > 0) ||
+                    (Array.isArray(profile.currentSkills) && profile.currentSkills.length > 0);
+  return Boolean(hasTarget || hasPersonal || hasAcademics || hasSkills);
 };
 
 // @desc    Get or auto-generate Career Analysis
@@ -19,9 +23,18 @@ const isProfileComplete = (profile) => {
 // @access  Private
 export const getCareerAnalysis = async (req, res) => {
   try {
-    const profile = await Profile.findOne({ user: req.user._id });
+    let profile = await Profile.findOne({ user: req.user._id });
 
-    if (!isProfileComplete(profile)) {
+    if (!profile && req.user?.isOnboarded) {
+      profile = await Profile.create({
+        user: req.user._id,
+        personal: { name: req.user.name },
+        career: { targetRole: 'Full Stack Developer' },
+        skills: { currentSkills: [] },
+      });
+    }
+
+    if (!isProfileComplete(profile, req.user)) {
       return res.status(200).json({
         success: false,
         incomplete: true,
@@ -117,9 +130,18 @@ export const getCareerAnalysis = async (req, res) => {
 // @access  Private
 export const refreshCareerAnalysis = async (req, res) => {
   try {
-    const profile = await Profile.findOne({ user: req.user._id });
+    let profile = await Profile.findOne({ user: req.user._id });
 
-    if (!isProfileComplete(profile)) {
+    if (!profile && req.user?.isOnboarded) {
+      profile = await Profile.create({
+        user: req.user._id,
+        personal: { name: req.user.name },
+        career: { targetRole: 'Full Stack Developer' },
+        skills: { currentSkills: [] },
+      });
+    }
+
+    if (!isProfileComplete(profile, req.user)) {
       return res.status(400).json({
         success: false,
         incomplete: true,

@@ -97,13 +97,13 @@ const INDUSTRY_TAXONOMY = {
  * Perform Profile-Driven Career Analysis
  */
 export const generateCareerAnalysis = async (profile) => {
-  const currentSkills = profile.skills?.currentSkills || [];
-  const targetRole = profile.career?.targetRole || 'Full Stack Developer';
-  const careerInterest = profile.career?.careerInterest || 'Software Development';
-  const degree = profile.personal?.degree || 'B.Tech';
-  const branch = profile.personal?.branch || 'Computer Science';
-  const semester = profile.academics?.semester || '6th Semester';
-  const projects = profile.skills?.projects || [];
+  const currentSkills = profile?.skills?.currentSkills || profile?.currentSkills || [];
+  const targetRole = profile?.career?.targetRole || profile?.targetRole || 'Full Stack Developer';
+  const careerInterest = profile?.career?.careerInterest || profile?.careerInterest || targetRole;
+  const degree = profile?.personal?.degree || profile?.degree || profile?.academics?.degree || 'B.Tech';
+  const branch = profile?.personal?.branch || profile?.branch || profile?.academics?.branch || 'Computer Science';
+  const semester = profile?.academics?.semester || profile?.semester || '6th Semester';
+  const projects = profile?.skills?.projects || profile?.projects || [];
 
   // Check if external LLM API key is provided
   const apiKey = process.env.AI_API_KEY || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY;
@@ -196,10 +196,10 @@ Required JSON Structure:
  * Computes exact match percentages, why-it-matches reasons, skill gaps, and next best steps from live profile
  */
 const generateProfileDrivenAnalysis = (profile) => {
-  const currentSkills = (profile.skills?.currentSkills || []).map((s) => s.trim());
+  const currentSkills = (profile?.skills?.currentSkills || profile?.currentSkills || []).map((s) => s.trim());
   const normalizedUserSkills = currentSkills.map((s) => s.toLowerCase());
-  const targetRole = profile.career?.targetRole || 'Full Stack Developer';
-  const projects = profile.skills?.projects || [];
+  const targetRole = profile?.career?.targetRole || profile?.targetRole || 'Full Stack Developer';
+  const projects = profile?.skills?.projects || profile?.projects || [];
 
   // Determine Primary Role and 2 Alternative Roles
   const allRoles = Object.keys(INDUSTRY_TAXONOMY);
