@@ -42,6 +42,7 @@ export const DashboardPage = () => {
   const [interviewAnalysis, setInterviewAnalysis] = useState(null);
   const [recommendedOpps, setRecommendedOpps] = useState([]);
   const [roadmapData, setRoadmapData] = useState(null);
+  const [candidateProgress, setCandidateProgress] = useState(null);
   const [analysisLoading, setAnalysisLoading] = useState(true);
   const [fetchError, setFetchError] = useState(null);
 
@@ -57,12 +58,13 @@ export const DashboardPage = () => {
         setAnalysisLoading(true);
         setFetchError(null);
 
-        const [careerRes, resumeRes, interviewRes, oppsRes, roadmapRes] = await Promise.allSettled([
+        const [careerRes, resumeRes, interviewRes, oppsRes, roadmapRes, progressRes] = await Promise.allSettled([
           api.get('/ai/career-analysis'),
           api.get('/resume/latest'),
           api.get('/interview/latest'),
           api.get('/opportunities/recommended'),
           api.get('/roadmap'),
+          api.get('/profile/candidate-progress'),
         ]);
 
         if (careerRes.status === 'fulfilled' && careerRes.value.data?.success) {
@@ -79,6 +81,9 @@ export const DashboardPage = () => {
         }
         if (roadmapRes.status === 'fulfilled' && roadmapRes.value.data?.success && roadmapRes.value.data.roadmap) {
           setRoadmapData(roadmapRes.value.data.roadmap);
+        }
+        if (progressRes.status === 'fulfilled' && progressRes.value.data?.success && progressRes.value.data.progress) {
+          setCandidateProgress(progressRes.value.data.progress);
         }
       } catch (err) {
         console.warn('Dashboard intelligence fetch note:', err.message);
@@ -97,49 +102,46 @@ export const DashboardPage = () => {
     return <LoadingSpinner fullScreen label="Loading your career readiness intelligence..." />;
   }
 
-  // Live calculated core metrics strictly derived from real database models
-  const primaryCareer = analysis?.careers?.[0];
-  const targetRole = primaryCareer?.role || profile?.career?.targetRole || profile?.targetRole || 'Full Stack Developer';
+  // ====================================================================
+  // ALL METRICS DERIVED FROM UNIFIED CANDIDATE PROGRESS (Single Source of Truth)
+  // Falls back to old logic ONLY if progress endpoint hasn't loaded yet
+  // ====================================================================
+  const cp = candidateProgress;
 
-  // 1. Resume ATS Score (Strictly real: null if user has not uploaded/scanned resume)
-  const resumeScore = (resumeAnalysis && typeof resumeAnalysis.atsScore?.overall === 'number' && resumeAnalysis.atsScore.overall > 0)
-    ? resumeAnalysis.atsScore.overall
-    : ((profile?.readiness && typeof profile.readiness.resumeScore === 'number' && profile.readiness.resumeScore > 0)
-      ? profile.readiness.resumeScore
-      : null);
+  const primaryCareer = analysis?.careers?.[0];
+  const targetRole = cp?.targetRole || primaryCareer?.role || profile?.career?.targetRole || profile?.targetRole || 'Full Stack Developer';
+
+  // 1. Resume ATS Score — from unified progress
+  const resumeScore = cp?.resume?.atsScore
+    ?? ((resumeAnalysis && typeof resumeAnalysis.atsScore?.overall === 'number' && resumeAnalysis.atsScore.overall > 0)
+      ? resumeAnalysis.atsScore.overall : null);
   const hasResume = resumeScore !== null;
 
-  // 2. Mock Interview Score (Strictly real: null if user has not completed mock interview)
-  const interviewScore = (interviewAnalysis?.completed && typeof interviewAnalysis.overallScore?.overall === 'number' && interviewAnalysis.overallScore.overall > 0)
-    ? interviewAnalysis.overallScore.overall
-    : ((interviewAnalysis?.completed && typeof interviewAnalysis.scores?.overall === 'number' && interviewAnalysis.scores.overall > 0)
-      ? interviewAnalysis.scores.overall
-      : ((profile?.readiness && typeof profile.readiness.interviewScore === 'number' && profile.readiness.interviewScore > 0)
-        ? profile.readiness.interviewScore
-        : null));
+  // 2. Mock Interview Score — from unified progress
+  const interviewScore = cp?.mockInterview?.score
+    ?? ((interviewAnalysis?.completed && typeof interviewAnalysis.overallScore?.overall === 'number' && interviewAnalysis.overallScore.overall > 0)
+      ? interviewAnalysis.overallScore.overall : null);
   const hasInterview = interviewScore !== null;
 
-  // 3. Skill Assessment Score (Strictly real: null if user has not taken assessment)
-  const skillAssessmentScore = (profile?.readiness && typeof profile.readiness.skillAssessmentScore === 'number' && profile.readiness.skillAssessmentScore > 0)
-    ? profile.readiness.skillAssessmentScore
-    : null;
+  // 3. Skill Assessment Score — from unified progress (THIS WAS THE BUG)
+  const skillAssessmentScore = cp?.skillAssessment?.score
+    ?? ((profile?.readiness && typeof profile.readiness.skillAssessmentScore === 'number' && profile.readiness.skillAssessmentScore > 0)
+      ? profile.readiness.skillAssessmentScore : null);
   const hasAssessment = skillAssessmentScore !== null;
 
-  // 4. Skill Match Score (Derived strictly from real profile skills vs target role benchmark)
-  const skillMatchScore = typeof primaryCareer?.matchPercentage === 'number'
-    ? primaryCareer.matchPercentage
-    : (typeof profile?.readiness?.skillMatchScore === 'number' ? profile.readiness.skillMatchScore : null);
+  // 4. Skill Match Score
+  const skillMatchScore = cp?.skillGap?.matchPercentage
+    ?? (typeof primaryCareer?.matchPercentage === 'number' ? primaryCareer.matchPercentage : null);
 
-  // 5. Career Readiness Score (Strictly real: only calculated when required evaluations exist, otherwise null/Pending)
-  const isReadinessEvaluated = hasResume && hasInterview && typeof analysis?.readinessScore?.overall === 'number' && analysis.readinessScore.overall > 0;
-  const readinessScore = isReadinessEvaluated
-    ? analysis.readinessScore.overall
-    : (user?.isDemo && profile?.readiness?.readinessScore ? profile.readiness.readinessScore : null);
+  // 5. Career Readiness Score — from unified progress
+  const readinessScore = cp?.readiness?.overall
+    ?? ((typeof analysis?.readinessScore?.overall === 'number' && analysis.readinessScore.overall > 0)
+      ? analysis.readinessScore.overall : null);
 
-  // 6. Roadmap Metrics (Strictly real: 0 completed tasks for new users)
-  const roadmapCompletedTasks = roadmapData?.completedTasks || 0;
-  const roadmapTotalTasks = roadmapData?.totalTasks || 12;
-  const roadmapProgress = roadmapData?.overallProgress || (roadmapTotalTasks > 0 ? Math.round((roadmapCompletedTasks / roadmapTotalTasks) * 100) : 0);
+  // 6. Roadmap Metrics — from unified progress
+  const roadmapCompletedTasks = cp?.roadmap?.completedTasks ?? roadmapData?.completedTasks ?? 0;
+  const roadmapTotalTasks = cp?.roadmap?.totalTasks ?? roadmapData?.totalTasks ?? 12;
+  const roadmapProgress = cp?.roadmap?.progress ?? (roadmapTotalTasks > 0 ? Math.round((roadmapCompletedTasks / roadmapTotalTasks) * 100) : 0);
 
   // Deterministic Next Best Step
   const nextBestStepObj = getDeterministicNextStep({
@@ -151,13 +153,18 @@ export const DashboardPage = () => {
     recommendedOpps,
   });
 
-  const topSkillGaps = primaryCareer?.missingSkills?.slice(0, 3).map((m) => ({
+  const topSkillGaps = cp?._raw?.topSkillGaps?.map((m) => ({
+    name: m.skill,
+    priority: m.priority,
+    reason: m.reason,
+  })) || primaryCareer?.missingSkills?.slice(0, 3).map((m) => ({
     name: m.skill,
     priority: m.priority,
     reason: m.reason,
   })) || profile?.readiness?.topSkillGaps || [];
 
-  const isProfileDone = Boolean(user?.isOnboarded && profile?.skills?.currentSkills?.length > 0);
+  const isProfileDone = cp?.profile?.status === 'COMPLETED'
+    || Boolean(user?.isOnboarded && profile?.skills?.currentSkills?.length > 0);
 
   // First pending evaluation route for CTA button
   const getNextPendingRoute = () => {
@@ -291,8 +298,8 @@ export const DashboardPage = () => {
 
                   {/* Item 3: Skill Assessment */}
                   <div
-                    onClick={() => !hasAssessment && navigate('/skills')}
-                    className={`flex items-center justify-between gap-3 ${!hasAssessment ? 'cursor-pointer group' : ''}`}
+                    onClick={() => navigate('/skills')}
+                    className="flex items-center justify-between gap-3 cursor-pointer group"
                   >
                     <div className="flex items-center gap-3">
                       <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-xs ${hasAssessment ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400 border border-slate-200'}`}>
@@ -300,12 +307,12 @@ export const DashboardPage = () => {
                       </div>
                       <div>
                         <h4 className="text-xs font-bold text-slate-900 group-hover:text-brand-600 transition-colors">Skill Assessment</h4>
-                        <p className="text-[11px] text-slate-500">{hasAssessment ? 'Technical knowledge & problem solving' : 'Take a role-based assessment'}</p>
+                        <p className="text-[11px] text-slate-500">{hasAssessment ? `${cp?.skillAssessment?.masteredSkills || '—'}/${cp?.skillAssessment?.totalSkills || '—'} skills mastered` : 'Take a role-based assessment'}</p>
                       </div>
                     </div>
                     {hasAssessment ? (
-                      <span className="text-[11px] font-bold text-brand-700 bg-brand-50 border border-brand-200/80 px-2.5 py-0.5 rounded-full shrink-0">
-                        {skillAssessmentScore}/100
+                      <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2.5 py-0.5 rounded-full shrink-0">
+                        Completed
                       </span>
                     ) : (
                       <span className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200/80 px-2.5 py-0.5 rounded-full shrink-0 group-hover:bg-amber-100 transition-colors">
@@ -319,21 +326,25 @@ export const DashboardPage = () => {
 
                   {/* Item 4: Mock Interview */}
                   <div
-                    onClick={() => !hasInterview && navigate('/interview')}
-                    className={`flex items-center justify-between gap-3 ${!hasInterview ? 'cursor-pointer group' : ''}`}
+                    onClick={() => navigate('/interview')}
+                    className="flex items-center justify-between gap-3 cursor-pointer group"
                   >
                     <div className="flex items-center gap-3">
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-xs ${hasInterview ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400 border border-slate-200'}`}>
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-xs ${hasInterview ? 'bg-emerald-500 text-white' : (cp?.mockInterview?.status === 'IN_PROGRESS' ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-400 border border-slate-200')}`}>
                         {hasInterview ? <CheckCircle2 className="w-4 h-4" /> : <MessageSquareCode className="w-3.5 h-3.5" />}
                       </div>
                       <div>
                         <h4 className="text-xs font-bold text-slate-900 group-hover:text-brand-600 transition-colors">Mock Interview</h4>
-                        <p className="text-[11px] text-slate-500">{hasInterview ? 'Communication & interview readiness' : 'Give a mock interview with AI'}</p>
+                        <p className="text-[11px] text-slate-500">{hasInterview ? `Score: ${interviewScore}/100 · View Feedback` : (cp?.mockInterview?.status === 'IN_PROGRESS' ? 'Continue your interview' : 'Give a mock interview with AI')}</p>
                       </div>
                     </div>
                     {hasInterview ? (
-                      <span className="text-[11px] font-bold text-brand-700 bg-brand-50 border border-brand-200/80 px-2.5 py-0.5 rounded-full shrink-0">
+                      <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2.5 py-0.5 rounded-full shrink-0">
                         {interviewScore}/100
+                      </span>
+                    ) : cp?.mockInterview?.status === 'IN_PROGRESS' ? (
+                      <span className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200/80 px-2.5 py-0.5 rounded-full shrink-0">
+                        In Progress
                       </span>
                     ) : (
                       <span className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200/80 px-2.5 py-0.5 rounded-full shrink-0 group-hover:bg-amber-100 transition-colors">
@@ -528,10 +539,15 @@ export const DashboardPage = () => {
             </div>
             <div className="flex items-baseline gap-1">
               <h4 className={`font-extrabold font-display text-slate-900 ${hasInterview ? 'text-2xl' : 'text-lg'}`}>
-                {hasInterview ? `${interviewScore}%` : 'Pending'}
+                {hasInterview ? `${interviewScore}%` : (cp?.mockInterview?.status === 'IN_PROGRESS' ? 'In Progress' : 'Pending')}
               </h4>
               {!hasInterview && (
-                <span className="text-[11px] text-slate-400 ml-1">Start interview</span>
+                <span className="text-[11px] text-slate-400 ml-1">
+                  {cp?.mockInterview?.status === 'IN_PROGRESS' ? 'Continue interview' : 'Start interview'}
+                </span>
+              )}
+              {hasInterview && (
+                <span className="text-[11px] text-slate-400 ml-1">View Feedback</span>
               )}
             </div>
             <div className="w-full bg-slate-100 rounded-full h-1.5 mt-3 overflow-hidden">
@@ -578,6 +594,7 @@ export const DashboardPage = () => {
           interviewAnalysis={interviewAnalysis}
           recommendedOpps={recommendedOpps}
           readinessScore={readinessScore}
+          candidateProgress={candidateProgress}
         />
 
         {/* =========================================================

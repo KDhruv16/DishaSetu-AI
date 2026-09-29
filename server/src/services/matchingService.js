@@ -110,8 +110,8 @@ export const calculateOpportunityMatch = (opportunity, profile) => {
 
   // 3. Education & Eligibility Match (10%)
   let eduScore = 10;
-  const studentDegree = (profile.degree || '').toLowerCase();
-  const studentBranch = (profile.branch || '').toLowerCase();
+  const studentDegree = (profile.personal?.degree || profile.degree || '').toLowerCase();
+  const studentBranch = (profile.personal?.branch || profile.branch || '').toLowerCase();
   const oppQual = (opportunity.qualification || '').toLowerCase();
 
   if (oppQual) {
@@ -203,15 +203,20 @@ export const calculateOpportunityMatch = (opportunity, profile) => {
       expScore,
     },
   };
-};
-
-/**
+};/**
  * Calculates deterministic Opportunity-Specific Application Readiness
  */
 export const calculateApplicationReadiness = (opportunity, profile, resumeAnalysis, interviewAnalysis) => {
   const match = calculateOpportunityMatch(opportunity, profile);
 
-  const isProfileComplete = Boolean(profile && profile.targetRole && profile.degree);
+  const isProfileComplete = !!(
+    profile &&
+    profile.personal?.name &&
+    profile.career?.targetRole &&
+    Array.isArray(profile.skills?.currentSkills) &&
+    profile.skills.currentSkills.length > 0
+  );
+
   const totalReqSkills = (opportunity.skills || []).length;
   const matchedSkillsCount = match.matchedSkills.length;
   const skillCoveragePct = totalReqSkills > 0 ? Math.round((matchedSkillsCount / totalReqSkills) * 100) : 100;

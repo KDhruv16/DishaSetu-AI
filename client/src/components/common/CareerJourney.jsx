@@ -26,24 +26,59 @@ export const CareerJourney = ({
   interviewAnalysis,
   recommendedOpps = [],
   readinessScore = 0,
+  candidateProgress = null,
 }) => {
   const navigate = useNavigate();
+  const cp = candidateProgress;
 
-  // Evaluate deterministic status for each of the 9 required stages based on REAL user progress
-  const isProfileDone = Boolean(user?.isOnboarded && profile?.skills?.currentSkills?.length > 0);
-  const isResumeDone = Boolean(resumeAnalysis && typeof resumeAnalysis.atsScore?.overall === 'number' && resumeAnalysis.atsScore.overall > 0);
-  const isInterviewDone = Boolean(interviewAnalysis && interviewAnalysis.completed === true);
-  const isRoadmapStarted = Boolean(roadmapData && roadmapData.completedTasks > 0);
-  const isRoadmapCompleted = Boolean(roadmapData && roadmapData.completedTasks >= (roadmapData.totalTasks || 12) && roadmapData.completedTasks > 0);
-  const isCareerDone = Boolean(analysis?.careers?.length > 0 && isProfileDone);
-  const isSkillGapDone = Boolean(
-    (profile?.readiness?.skillAssessmentScore && profile.readiness.skillAssessmentScore > 0) ||
-    (isCareerDone && isResumeDone)
-  );
-  const isOpportunitiesDone = Boolean(isResumeDone && isInterviewDone && recommendedOpps && recommendedOpps.length > 0);
-  const isCareerReadyDone = Boolean(
-    typeof readinessScore === 'number' && readinessScore >= 80 && isResumeDone && isInterviewDone && isRoadmapStarted
-  );
+  // ====================================================================
+  // STATUS DERIVATION — Uses unified candidateProgress (Single Source of Truth)
+  // Falls back to old logic only when candidateProgress is unavailable
+  // ====================================================================
+  const isProfileDone = cp
+    ? cp.profile?.status === 'COMPLETED'
+    : Boolean(user?.isOnboarded && profile?.skills?.currentSkills?.length > 0);
+
+  const isResumeDone = cp
+    ? cp.resume?.status === 'ANALYZED'
+    : Boolean(resumeAnalysis && typeof resumeAnalysis.atsScore?.overall === 'number' && resumeAnalysis.atsScore.overall > 0);
+
+  const isInterviewDone = cp
+    ? cp.mockInterview?.status === 'COMPLETED'
+    : Boolean(interviewAnalysis && interviewAnalysis.completed === true);
+
+  const isRoadmapStarted = cp
+    ? (cp.roadmap?.status === 'IN_PROGRESS' || cp.roadmap?.status === 'COMPLETED')
+    : Boolean(roadmapData && roadmapData.completedTasks > 0);
+
+  const isRoadmapCompleted = cp
+    ? cp.roadmap?.status === 'COMPLETED'
+    : Boolean(roadmapData && roadmapData.completedTasks >= (roadmapData.totalTasks || 12) && roadmapData.completedTasks > 0);
+
+  const isCareerDone = cp
+    ? (cp.skillGap?.status === 'COMPLETED' || cp.skillGap?.status === 'AVAILABLE')
+    : Boolean(analysis?.careers?.length > 0 && isProfileDone);
+
+  // FIXED: Use unified progress for skill gap — this was the main bug source
+  const isSkillGapDone = cp
+    ? cp.skillAssessment?.status === 'COMPLETED'
+    : Boolean(
+        (profile?.readiness?.skillAssessmentScore && profile.readiness.skillAssessmentScore > 0) ||
+        (isCareerDone && isProfileDone)
+      );
+
+  const isLearningActive = cp
+    ? (cp.learning?.status === 'IN_PROGRESS' || cp.learning?.status === 'COMPLETED')
+    : isRoadmapStarted;
+
+  const isOpportunitiesDone = cp
+    ? cp.opportunities?.status === 'AVAILABLE'
+    : Boolean(isResumeDone && isInterviewDone && recommendedOpps && recommendedOpps.length > 0);
+
+  const effectiveReadiness = cp?.readiness?.overall ?? readinessScore;
+  const isCareerReadyDone = cp
+    ? (cp.readiness?.overall !== null && cp.readiness.overall >= 80)
+    : Boolean(typeof readinessScore === 'number' && readinessScore >= 80 && isResumeDone && isInterviewDone && isRoadmapStarted);
 
   // Compute status: 'completed' | 'current' | 'upcoming'
   const getStageStatus = (key) => {
@@ -57,7 +92,7 @@ export const CareerJourney = ({
         if (isSkillGapDone) return 'completed';
         return isCareerDone ? 'current' : 'upcoming';
       case 'learning':
-        if (isRoadmapStarted) return 'completed';
+        if (isLearningActive) return 'completed';
         return isSkillGapDone ? 'current' : 'upcoming';
       case 'roadmap':
         if (isRoadmapCompleted) return 'completed';

@@ -48,15 +48,28 @@ export const OpportunitiesPage = () => {
   const [modalIntelligence, setModalIntelligence] = useState(null);
   const [modalLoading, setModalLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-
-  const isProfileComplete = Boolean(
-    profile && (profile.targetRole || (profile.skills && profile.skills.length > 0))
-  );
+  const [candidateProgress, setCandidateProgress] = useState(null);
 
   useEffect(() => {
     fetchOpportunities();
     fetchRecommended();
+    fetchCandidateProgress();
   }, [profile]);
+
+  const fetchCandidateProgress = async () => {
+    try {
+      const res = await api.get('/profile/candidate-progress');
+      if (res.data?.success) {
+        setCandidateProgress(res.data.progress);
+      }
+    } catch (err) {
+      console.error('Failed to load candidate progress:', err);
+    }
+  };
+
+  const isProfileComplete = candidateProgress
+    ? candidateProgress.profile?.status === 'COMPLETED'
+    : Boolean(user?.isOnboarded);
 
   const fetchOpportunities = async () => {
     try {

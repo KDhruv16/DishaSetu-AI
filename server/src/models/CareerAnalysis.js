@@ -51,6 +51,9 @@ const careerAnalysisSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    dataFingerprint: {
+      type: String,
+    },
   },
   {
     timestamps: true,

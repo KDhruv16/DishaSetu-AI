@@ -5,6 +5,7 @@ import Roadmap from '../models/Roadmap.js';
 import ResumeAnalysis from '../models/ResumeAnalysis.js';
 import Interview from '../models/Interview.js';
 import { computeNextBestStep } from '../services/nextBestStepService.js';
+import { computeCandidateProgress } from '../services/candidateProgressService.js';
 
 
 // Skill benchmarks for target roles (rule-based intelligence for baseline readiness calculation)
@@ -35,6 +36,13 @@ const calculateReadiness = (targetRole, userSkills = []) => {
       ? Math.round((matchedSkills.length / benchmarkSkills.length) * 100)
       : null;
 
+  // Skill Assessment Score: derived from how many benchmark skills the user currently has
+  // This is the REAL score based on actual user skills — NOT hardcoded null
+  const skillAssessmentScore =
+    userSkills.length > 0 && benchmarkSkills.length > 0
+      ? Math.round((matchedSkills.length / benchmarkSkills.length) * 100)
+      : null;
+
   // New profiles start with Evaluation Pending (null) until real resume and mock interview are completed
   const readinessScore = null;
 
@@ -54,7 +62,7 @@ const calculateReadiness = (targetRole, userSkills = []) => {
     skillMatchScore,
     resumeScore: null,
     interviewScore: null,
-    skillAssessmentScore: null,
+    skillAssessmentScore,
     topSkillGaps: topSkillGaps.length > 0 ? topSkillGaps : [],
     nextBestStep,
   };
@@ -72,6 +80,30 @@ export const getProfile = async (req, res) => {
         success: false,
         message: 'Profile not found. Please complete onboarding.',
       });
+    }
+
+    // Backfill: if user has currentSkills but skillAssessmentScore is null (legacy data),
+    // compute the real score now so Dashboard shows correct state
+    if (
+      profile.readiness &&
+      (profile.readiness.skillAssessmentScore === null || profile.readiness.skillAssessmentScore === undefined) &&
+      Array.isArray(profile.skills?.currentSkills) &&
+      profile.skills.currentSkills.length > 0
+    ) {
+      const targetRole = profile.career?.targetRole || 'Full Stack Developer';
+      const benchmarkSkills = ROLE_SKILL_BENCHMARKS[targetRole] || ROLE_SKILL_BENCHMARKS['Full Stack Developer'];
+      const normalizedUserSkills = profile.skills.currentSkills.map((s) => s.trim().toLowerCase());
+      const matchedSkills = benchmarkSkills.filter((bSkill) =>
+        normalizedUserSkills.includes(bSkill.toLowerCase())
+      );
+      const computedScore = benchmarkSkills.length > 0
+        ? Math.round((matchedSkills.length / benchmarkSkills.length) * 100)
+        : null;
+
+      if (computedScore !== null && computedScore > 0) {
+        profile.readiness.skillAssessmentScore = computedScore;
+        await profile.save();
+      }
     }
 
     return res.status(200).json({
@@ -193,9 +225,16 @@ export const updateProfile = async (req, res) => {
     const effectiveSkills = profile.skills?.currentSkills || [];
     const metrics = calculateReadiness(effectiveTargetRole, effectiveSkills);
 
+    // Merge readiness metrics, preserving existing non-null real scores
+    // (resumeScore, interviewScore come from their respective controllers, not from calculateReadiness)
+    const existingReadiness = profile.readiness ? profile.readiness.toObject() : {};
     profile.readiness = {
-      ...profile.readiness.toObject(),
+      ...existingReadiness,
       ...metrics,
+      // Preserve real scores that were set by resume/interview controllers
+      resumeScore: metrics.resumeScore !== null ? metrics.resumeScore : existingReadiness.resumeScore,
+      interviewScore: metrics.interviewScore !== null ? metrics.interviewScore : existingReadiness.interviewScore,
+      readinessScore: metrics.readinessScore !== null ? metrics.readinessScore : existingReadiness.readinessScore,
     };
 
     await profile.save();
@@ -252,6 +291,122 @@ export const getNextBestStepHandler = async (req, res) => {
       message: 'Server error computing next best step',
       error: error.message,
     });
+  }
+};
+
+// @desc    Get Unified Candidate Progress (Single Source of Truth)
+// @route   GET /api/profile/candidate-progress
+// @access  Private
+export const getCandidateProgress = async (req, res) => {
+  try {
+    const progress = await computeCandidateProgress(req.user._id);
+
+    return res.status(200).json({
+      success: true,
+      progress,
+    });
+  } catch (error) {
+    console.error('Get Candidate Progress Error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error computing candidate progress',
+      error: error.message,
+    });
+  }
+};
+
+// ==========================================
+// CLOSED LOOP SKILL ENGINE
+// ==========================================
+
+// @desc    Start learning a specific skill
+// @route   POST /api/profile/skills/learn
+// @access  Private
+export const startSkillLearning = async (req, res) => {
+  try {
+    const { skill } = req.body;
+    if (!skill) return res.status(400).json({ success: false, message: 'Skill is required' });
+
+    let profile = await Profile.findOne({ user: req.user._id });
+    if (!profile) return res.status(404).json({ success: false, message: 'Profile not found' });
+
+    if (!profile.skills.learningSkills.includes(skill)) {
+      profile.skills.learningSkills.push(skill);
+      await profile.save();
+    }
+
+    return res.status(200).json({ success: true, message: 'Started learning skill', profile });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Mark skill learning as completed
+// @route   POST /api/profile/skills/complete-learning
+// @access  Private
+export const completeSkillLearning = async (req, res) => {
+  try {
+    const { skill } = req.body;
+    if (!skill) return res.status(400).json({ success: false, message: 'Skill is required' });
+
+    let profile = await Profile.findOne({ user: req.user._id });
+    if (!profile) return res.status(404).json({ success: false, message: 'Profile not found' });
+
+    // Remove from learningSkills
+    profile.skills.learningSkills = profile.skills.learningSkills.filter(s => s !== skill);
+    
+    // Add to readyForEvaluationSkills
+    if (!profile.skills.readyForEvaluationSkills.includes(skill) && !profile.skills.currentSkills.includes(skill)) {
+      profile.skills.readyForEvaluationSkills.push(skill);
+    }
+    
+    await profile.save();
+    return res.status(200).json({ success: true, message: 'Learning completed, ready for evaluation', profile });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Validate a skill (e.g. via mock assessment)
+// @route   POST /api/profile/skills/validate
+// @access  Private
+export const validateSkill = async (req, res) => {
+  try {
+    const { skill, passed, score } = req.body;
+    if (!skill) return res.status(400).json({ success: false, message: 'Skill is required' });
+
+    let profile = await Profile.findOne({ user: req.user._id });
+    if (!profile) return res.status(404).json({ success: false, message: 'Profile not found' });
+
+    if (passed) {
+      // Remove from readyForEvaluationSkills
+      profile.skills.readyForEvaluationSkills = profile.skills.readyForEvaluationSkills.filter(s => s !== skill);
+      
+      // Add to currentSkills (VERIFIED)
+      if (!profile.skills.currentSkills.includes(skill)) {
+        profile.skills.currentSkills.push(skill);
+      }
+      
+      // Also sync Readiness metrics automatically
+      const targetRole = profile.career?.targetRole || 'Full Stack Developer';
+      const metrics = calculateReadiness(targetRole, profile.skills.currentSkills);
+      const existingReadiness = profile.readiness ? profile.readiness.toObject() : {};
+      
+      profile.readiness = {
+        ...existingReadiness,
+        ...metrics,
+        resumeScore: existingReadiness.resumeScore,
+        interviewScore: existingReadiness.interviewScore,
+      };
+
+      await profile.save();
+      return res.status(200).json({ success: true, message: 'Skill validated successfully! Skill is now verified.', profile, passed: true });
+    } else {
+      // Failed - skill remains in readyForEvaluationSkills (not verified)
+      return res.status(200).json({ success: true, message: 'Skill validation failed. Keep practicing!', passed: false, score });
+    }
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
 

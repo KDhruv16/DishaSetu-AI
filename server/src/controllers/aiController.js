@@ -18,6 +18,17 @@ const isProfileComplete = (profile, user) => {
   return Boolean(hasTarget || hasPersonal || hasAcademics || hasSkills);
 };
 
+// Helper to generate a deterministic fingerprint of candidate data
+const generateDataFingerprint = (profile) => {
+  const currentSkills = (profile.skills?.currentSkills || profile.currentSkills || []).map(s => s.toLowerCase()).sort().join(',');
+  const targetRole = (profile.career?.targetRole || profile.targetRole || '').toLowerCase();
+  const degree = (profile.personal?.degree || profile.degree || '').toLowerCase();
+  const branch = (profile.personal?.branch || profile.branch || '').toLowerCase();
+  const projects = (profile.skills?.projects || profile.projects || []).join(',').toLowerCase();
+  
+  return Buffer.from([targetRole, degree, branch, currentSkills, projects].join('|')).toString('base64');
+};
+
 // @desc    Get or auto-generate Career Analysis
 // @route   GET /api/ai/career-analysis
 // @access  Private
@@ -42,45 +53,17 @@ export const getCareerAnalysis = async (req, res) => {
       });
     }
 
-    // Check if analysis already exists in DB
+    const dataFingerprint = generateDataFingerprint(profile);
     let analysis = await CareerAnalysis.findOne({ userId: req.user._id });
 
-    if (analysis) {
-      // Synchronize career missing skills with latest live profile currentSkills
-      const currentSkillsLower = (profile.skills?.currentSkills || []).map((s) => normalizeSkillName(s).toLowerCase());
-      let changed = false;
-
-      if (analysis.careers && analysis.careers.length > 0) {
-        analysis.careers.forEach((career) => {
-          const benchmarkSkills = ROLE_SKILL_BENCHMARKS[career.role] || career.requiredSkills || [];
-          const matched = benchmarkSkills.filter((b) => currentSkillsLower.includes(normalizeSkillName(b).toLowerCase()));
-          const remaining = benchmarkSkills.filter((b) => !currentSkillsLower.includes(normalizeSkillName(b).toLowerCase()));
-
-          const newMatchPct = benchmarkSkills.length > 0
-            ? Math.round((matched.length / benchmarkSkills.length) * 100)
-            : career.matchPercentage;
-
-          career.matchPercentage = newMatchPct;
-          career.missingSkills = remaining.map((skill, idx) => ({
-            skill: normalizeSkillName(skill),
-            priority: idx === 0 ? 'High' : 'Medium',
-            reason: `Important for modern ${career.role} development and industry standard practices.`,
-          }));
-          changed = true;
-        });
-      }
-
-      if (changed) {
-        await analysis.save();
-      }
-
+    if (analysis && analysis.dataFingerprint === dataFingerprint) {
       return res.status(200).json({
         success: true,
         analysis,
       });
     }
 
-    // If none exists, generate the initial analysis
+    // If none exists or fingerprint changed, generate deterministic analysis
     const aiResult = await generateCareerAnalysis(profile);
     const resumeDoc = await ResumeAnalysis.findOne({ userId: req.user._id });
     const interviewDoc = await Interview.findOne({ userId: req.user._id, completed: true });
@@ -92,12 +75,21 @@ export const getCareerAnalysis = async (req, res) => {
       resumeDoc?.atsScore?.overall || null
     );
 
-    analysis = await CareerAnalysis.create({
-      userId: req.user._id,
-      careers: aiResult.careers,
-      readinessScore: readiness,
-      generatedAt: new Date(),
-    });
+    if (analysis) {
+      analysis.careers = aiResult.careers;
+      analysis.readinessScore = readiness;
+      analysis.generatedAt = new Date();
+      analysis.dataFingerprint = dataFingerprint;
+      await analysis.save();
+    } else {
+      analysis = await CareerAnalysis.create({
+        userId: req.user._id,
+        careers: aiResult.careers,
+        readinessScore: readiness,
+        generatedAt: new Date(),
+        dataFingerprint,
+      });
+    }
 
     // Sync to Profile model for quick overview
     if (profile.readiness) {
@@ -149,7 +141,18 @@ export const refreshCareerAnalysis = async (req, res) => {
       });
     }
 
-    // Generate fresh AI analysis
+    const dataFingerprint = generateDataFingerprint(profile);
+    let analysis = await CareerAnalysis.findOne({ userId: req.user._id });
+
+    if (analysis && analysis.dataFingerprint === dataFingerprint) {
+      return res.status(200).json({
+        success: true,
+        message: 'Career analysis is already up to date.',
+        analysis,
+      });
+    }
+
+    // Generate fresh deterministic analysis
     const aiResult = await generateCareerAnalysis(profile);
     const resumeDoc = await ResumeAnalysis.findOne({ userId: req.user._id });
     const interviewDoc = await Interview.findOne({ userId: req.user._id, completed: true });
@@ -161,12 +164,11 @@ export const refreshCareerAnalysis = async (req, res) => {
       resumeDoc?.atsScore?.overall || null
     );
 
-    let analysis = await CareerAnalysis.findOne({ userId: req.user._id });
-
     if (analysis) {
       analysis.careers = aiResult.careers;
       analysis.readinessScore = readiness;
       analysis.generatedAt = new Date();
+      analysis.dataFingerprint = dataFingerprint;
       await analysis.save();
     } else {
       analysis = await CareerAnalysis.create({
@@ -174,6 +176,7 @@ export const refreshCareerAnalysis = async (req, res) => {
         careers: aiResult.careers,
         readinessScore: readiness,
         generatedAt: new Date(),
+        dataFingerprint,
       });
     }
 

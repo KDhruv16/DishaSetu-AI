@@ -25,6 +25,7 @@ export const SkillGapPage = () => {
 
   const [analysis, setAnalysis] = useState(null);
   const [userProfile, setUserProfile] = useState(authProfile || null);
+  const [candidateProgress, setCandidateProgress] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -32,9 +33,10 @@ export const SkillGapPage = () => {
     const fetchAnalysis = async () => {
       try {
         setLoading(true);
-        const [analysisRes, profileRes] = await Promise.allSettled([
+        const [analysisRes, profileRes, progressRes] = await Promise.allSettled([
           api.get('/ai/career-analysis'),
           api.get('/profile'),
+          api.get('/profile/candidate-progress'),
         ]);
 
         if (analysisRes.status === 'fulfilled' && analysisRes.value.data?.success && analysisRes.value.data.analysis) {
@@ -45,6 +47,10 @@ export const SkillGapPage = () => {
 
         if (profileRes.status === 'fulfilled' && profileRes.value.data?.success && profileRes.value.data.profile) {
           setUserProfile(profileRes.value.data.profile);
+        }
+
+        if (progressRes.status === 'fulfilled' && progressRes.value.data?.success && progressRes.value.data.progress) {
+          setCandidateProgress(progressRes.value.data.progress);
         }
       } catch (err) {
         console.error('Error in SkillGapPage:', err);
@@ -58,22 +64,25 @@ export const SkillGapPage = () => {
   }, [navigate]);
 
   const activeProfile = userProfile || authProfile;
+  const cp = candidateProgress;
+  
   const primaryCareer = analysis?.careers?.[0];
-  const targetRole = primaryCareer?.role || activeProfile?.career?.targetRole || activeProfile?.targetRole || 'Full Stack Developer';
+  const targetRole = cp?.targetRole || primaryCareer?.role || activeProfile?.career?.targetRole || activeProfile?.targetRole || 'Full Stack Developer';
+  
   const requiredSkills = primaryCareer?.requiredSkills || ROLE_SKILL_BENCHMARKS[targetRole] || ['React', 'Node.js', 'MongoDB', 'JavaScript', 'SQL', 'Docker', 'Testing'];
 
-  const masteredSkills = (activeProfile?.skills?.currentSkills || []).map((s) => normalizeSkillName(s));
+  const masteredSkills = cp?.skillAssessment?.masteredList || (activeProfile?.skills?.currentSkills || []).map((s) => normalizeSkillName(s));
   const normalizedMastered = masteredSkills.map((s) => s.toLowerCase());
 
-  const readySkills = (activeProfile?.skills?.readyForEvaluationSkills || []).map((s) => normalizeSkillName(s));
+  const readySkills = cp?.skillGap?.readyForEvaluation || (activeProfile?.skills?.readyForEvaluationSkills || []).map((s) => normalizeSkillName(s));
   const normalizedReady = readySkills.map((s) => s.toLowerCase());
 
-  const learningSkills = (activeProfile?.skills?.learningSkills || []).map((s) => normalizeSkillName(s));
+  const learningSkills = cp?.skillGap?.learning || (activeProfile?.skills?.learningSkills || []).map((s) => normalizeSkillName(s));
   const normalizedLearning = learningSkills.map((s) => s.toLowerCase());
 
   // Filter missing skills from career analysis or target role benchmarks:
   // Exclude skills that are ALREADY mastered or completed/ready for evaluation
-  const rawMissingSkills = primaryCareer?.missingSkills || [
+  const rawMissingSkills = cp?.skillGap?.missingSkills || primaryCareer?.missingSkills || [
     { skill: 'Docker', priority: 'High', reason: 'Essential for containerizing microservices and deployments.' },
     { skill: 'Testing', priority: 'Medium', reason: 'Required for writing reliable test suites in production.' },
     { skill: 'SQL', priority: 'Medium', reason: 'Fundamental for relational database queries and reporting.' },
