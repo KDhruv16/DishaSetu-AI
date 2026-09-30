@@ -29,10 +29,16 @@ export const LoginPage = () => {
     setIsLoading(false);
 
     if (res.success) {
-      if (res.user.isOnboarded) {
-        navigate('/dashboard');
+      if (res.user?.role === 'admin') {
+        navigate('/admin');
+      } else if (res.user?.role === 'organization') {
+        navigate('/organization');
       } else {
-        navigate('/onboarding');
+        if (res.user?.isOnboarded) {
+          navigate('/dashboard');
+        } else {
+          navigate('/onboarding');
+        }
       }
     } else {
       setError(res.message);

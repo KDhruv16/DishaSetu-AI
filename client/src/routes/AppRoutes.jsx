@@ -17,6 +17,12 @@ import { AnalyticsPage } from '../pages/AnalyticsPage';
 import { ProtectedRoute } from '../components/common/ProtectedRoute';
 import { AppLayout } from '../components/layout/AppLayout';
 
+// Organization Module Components & Pages
+import { OrganizationRoute } from '../components/organization/OrganizationRoute';
+import { OrganizationLayout } from '../components/organization/OrganizationLayout';
+import { OrganizationDashboardPage } from '../pages/organization/OrganizationDashboardPage';
+import { OrganizationProfilePage } from '../pages/organization/OrganizationProfilePage';
+
 // Admin Module Components & Pages
 import { AdminRoute } from '../components/admin/AdminRoute';
 import { AdminLayout } from '../components/admin/AdminLayout';
@@ -57,6 +63,14 @@ export const AppRoutes = () => {
           <Route path="/opportunities" element={<OpportunitiesPage />} />
           <Route path="/resume" element={<ResumePage />} />
           <Route path="/interview" element={<InterviewPage />} />
+        </Route>
+      </Route>
+
+      {/* Organization Protected Portal */}
+      <Route element={<OrganizationRoute />}>
+        <Route element={<OrganizationLayout />}>
+          <Route path="/organization" element={<OrganizationDashboardPage />} />
+          <Route path="/organization/profile" element={<OrganizationProfilePage />} />
         </Route>
       </Route>
 

@@ -15,13 +15,18 @@ const generateToken = (id) => {
 // @access  Public
 export const register = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
-
+    const { name, email, password, role } = req.body;
+    
     if (!name || !email || !password) {
       return res.status(400).json({
         success: false,
         message: 'Please provide name, email, and password',
       });
+    }
+
+    let assignedRole = 'user';
+    if (role === 'organization') {
+      assignedRole = 'organization';
     }
 
     if (password.length < 6) {
@@ -43,6 +48,7 @@ export const register = async (req, res) => {
       name,
       email: email.toLowerCase(),
       password,
+      role: assignedRole,
     });
 
     const token = generateToken(user._id);
@@ -54,6 +60,7 @@ export const register = async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        role: user.role,
         isOnboarded: user.isOnboarded,
       },
     });

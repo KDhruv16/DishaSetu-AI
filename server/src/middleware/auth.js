@@ -60,3 +60,29 @@ export const requireAdmin = (req, res, next) => {
   next();
 };
 
+/**
+ * Middleware to restrict access to organizations only
+ */
+export const requireOrganization = (req, res, next) => {
+  if (!req.user || req.user.role !== 'organization') {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied. Organization privileges required.',
+    });
+  }
+  next();
+};
+
+/**
+ * Middleware to restrict access to candidates (users) only
+ */
+export const requireCandidate = (req, res, next) => {
+  if (!req.user || req.user.role !== 'user') {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied. Candidate privileges required.',
+    });
+  }
+  next();
+};
+

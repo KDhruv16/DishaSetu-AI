@@ -10,6 +10,7 @@ export const RegisterPage = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [role, setRole] = useState('user');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -34,12 +35,16 @@ export const RegisterPage = () => {
     }
 
     setIsLoading(true);
-    const res = await register(name, email, password);
+    const res = await register(name, email, password, role);
     setIsLoading(false);
 
     if (res.success) {
-      // New registered user goes straight to onboarding
-      navigate('/onboarding');
+      if (res.user?.role === 'organization') {
+        navigate('/organization/profile');
+      } else {
+        // New registered user goes straight to onboarding
+        navigate('/onboarding');
+      }
     } else {
       setError(res.message);
     }
@@ -87,8 +92,33 @@ export const RegisterPage = () => {
               required
             />
 
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer p-3 border rounded-lg flex-1 border-slate-200">
+                <input
+                  type="radio"
+                  name="role"
+                  value="user"
+                  checked={role === 'user'}
+                  onChange={(e) => setRole(e.target.value)}
+                  className="w-4 h-4 text-primary focus:ring-primary border-gray-300"
+                />
+                Candidate
+              </label>
+              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer p-3 border rounded-lg flex-1 border-slate-200">
+                <input
+                  type="radio"
+                  name="role"
+                  value="organization"
+                  checked={role === 'organization'}
+                  onChange={(e) => setRole(e.target.value)}
+                  className="w-4 h-4 text-primary focus:ring-primary border-gray-300"
+                />
+                Organization
+              </label>
+            </div>
+
             <Input
-              label="College / Personal Email"
+              label="Email Address"
               id="email"
               type="email"
               placeholder="rahul@college.edu or name@gmail.com"
