@@ -27,7 +27,7 @@ export const LearningPage = () => {
   const [searchParams] = useSearchParams();
   const skillParam = searchParams.get('skill') || 'All';
 
-  const { profile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
   const [activeTab, setActiveTab] = useState('Recommended');
   const [courses, setCourses] = useState([]);
   const [recommended, setRecommended] = useState([]);
@@ -310,22 +310,74 @@ export const LearningPage = () => {
                   </div>
                 </div>
 
-                {/* Action CTA */}
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <span className="text-[11px] text-slate-400">
-                    {c.source}
-                  </span>
-                  <a
-                    href={c.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-600 hover:text-brand-800 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-xl transition-all"
-                  >
-                    Start Learning
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                </div>
-              </Card>
+                  {/* Action CTA */}
+                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                    <span className="text-[11px] text-slate-400">
+                      {c.source}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {profile?.skills?.currentSkills?.includes(c.skill) ? (
+                        <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-xl">
+                          <CheckCircle className="w-3.5 h-3.5" />
+                          Verified
+                        </span>
+                      ) : profile?.skills?.readyForEvaluationSkills?.includes(c.skill) ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => navigate('/interview?skill=' + encodeURIComponent(c.skill))}
+                          className="text-xs font-bold bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200"
+                        >
+                          Validation Available
+                        </Button>
+                      ) : profile?.skills?.learningSkills?.includes(c.skill) ? (
+                        <>
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={async () => {
+                              try {
+                                await api.post('/profile/skills/complete-learning', { skill: c.skill });
+                                refreshProfile();
+                              } catch (err) {
+                                console.error('Error completing learning', err);
+                              }
+                            }}
+                            className="text-xs"
+                          >
+                            Mark Completed
+                          </Button>
+                          <a
+                            href={c.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-xs font-bold text-brand-600 hover:text-brand-800"
+                          >
+                            Resume <ExternalLink className="w-3 h-3" />
+                          </a>
+                        </>
+                      ) : (
+                        <a
+                          href={c.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={async () => {
+                            try {
+                              await api.post('/profile/skills/learn', { skill: c.skill });
+                              refreshProfile();
+                            } catch (err) {
+                              console.error('Error starting learning', err);
+                            }
+                          }}
+                          className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-600 hover:text-brand-800 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-xl transition-all"
+                        >
+                          Start Learning
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </Card>
             ))}
           </div>
         )}

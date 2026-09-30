@@ -17,7 +17,7 @@ const questionSchema = new mongoose.Schema(
     validityReason: { type: String, default: '' },
     verdict: {
       type: String,
-      enum: ['excellent', 'good', 'partial', 'needs_improvement', 'incorrect', 'unanswered'],
+      enum: ['excellent', 'good', 'partial', 'needs_improvement', 'incorrect', 'unanswered', 'insufficient'],
       default: 'unanswered',
     },
     skillEvidence: {

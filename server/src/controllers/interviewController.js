@@ -4,6 +4,7 @@ import CareerAnalysis from '../models/CareerAnalysis.js';
 import { generateQuestions, evaluateStudentAnswer } from '../services/interviewService.js';
 import { calculateReadinessScore } from '../services/readinessService.js';
 import { normalizeSkillName, ROLE_SKILL_BENCHMARKS } from '../utils/skillNormalization.js';
+import { evaluateLocalFallback } from '../services/interviewEvaluator.js';
 
 // @desc    Start a New Mock Interview Session
 // @route   POST /api/interview/start
@@ -89,13 +90,23 @@ export const submitAnswer = async (req, res) => {
     }
 
     // Run AI / Gemini Evaluation on the actual student answer
-    const evaluation = await evaluateStudentAnswer(
-      targetQuestion.questionText,
-      studentAnswer,
-      interview.role,
-      interview.type,
-      interview.difficulty
-    );
+    let evaluation;
+    let evaluationSource = 'gemini';
+    try {
+      evaluation = await evaluateStudentAnswer(
+        targetQuestion.questionText,
+        studentAnswer,
+        interview.role,
+        interview.type,
+        interview.difficulty,
+        targetQuestion.category
+      );
+    } catch (evalError) {
+      console.warn('Gemini Evaluation failed, using local fallback:', evalError.message);
+      // Fallback to local evaluation
+      evaluation = evaluateLocalFallback(targetQuestion.questionText, studentAnswer);
+      evaluationSource = 'local_fallback';
+    }
 
     // Save actual answer and granular evaluation into question document
     targetQuestion.studentAnswer = studentAnswer.trim();
@@ -257,6 +268,7 @@ export const submitAnswer = async (req, res) => {
 
     return res.status(200).json({
       success: true,
+      evaluationSource,
       interview,
       currentEvaluation: evaluation,
     });

@@ -400,6 +400,44 @@ export const validateSkill = async (req, res) => {
       };
 
       await profile.save();
+
+      // Update CareerAnalysis missingSkills and matchPercentage deterministically
+      const careerAnalysis = await CareerAnalysis.findOne({
+        $or: [{ userId: req.user._id }, { user: req.user._id }],
+      });
+      if (careerAnalysis && careerAnalysis.careers?.length > 0) {
+        const primaryCareer = careerAnalysis.careers[0];
+        primaryCareer.missingSkills = primaryCareer.missingSkills.filter(
+          (ms) => ms.skill.toLowerCase() !== skill.toLowerCase()
+        );
+        const totalSkillsRequired = ROLE_SKILL_BENCHMARKS[targetRole]?.length || 10;
+        const mastered = totalSkillsRequired - primaryCareer.missingSkills.length;
+        primaryCareer.matchPercentage = Math.round((mastered / totalSkillsRequired) * 100);
+        await careerAnalysis.save();
+      }
+
+      // Update Roadmap progress deterministically
+      const roadmap = await Roadmap.findOne({ user: req.user._id });
+      if (roadmap && roadmap.weeks?.length > 0) {
+        let changed = false;
+        roadmap.weeks.forEach(week => {
+          week.tasks.forEach(task => {
+            if (task.skill && task.skill.toLowerCase() === skill.toLowerCase() && !task.completed) {
+              task.completed = true;
+              task.completedAt = new Date();
+              roadmap.completedTasks += 1;
+              changed = true;
+            }
+          });
+        });
+        if (changed) {
+          if (roadmap.totalTasks > 0) {
+            roadmap.overallProgress = Math.round((roadmap.completedTasks / roadmap.totalTasks) * 100);
+          }
+          await roadmap.save();
+        }
+      }
+
       return res.status(200).json({ success: true, message: 'Skill validated successfully! Skill is now verified.', profile, passed: true });
     } else {
       // Failed - skill remains in readyForEvaluationSkills (not verified)

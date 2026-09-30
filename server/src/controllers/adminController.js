@@ -26,7 +26,7 @@ export const getDashboardStats = async (req, res) => {
       recentCandidates,
     ] = await Promise.all([
       User.countDocuments({ role: { $ne: 'admin' } }),
-      User.countDocuments({ role: { $ne: 'admin' }, isActive: true }),
+      User.countDocuments({ role: { $ne: 'admin' }, isActive: { $ne: false } }),
       TargetRole.countDocuments(),
       Skill.countDocuments(),
       InterviewQuestion.countDocuments(),
@@ -979,8 +979,7 @@ export const getUsers = async (req, res) => {
     const { search, role, status, page = 1, limit = 20 } = req.query;
     const query = { role: { $ne: 'admin' } };
 
-    if (role) query['career.targetRole'] = role;
-    if (status === 'active') query.isActive = true;
+    if (status === 'active') query.isActive = { $ne: false };
     if (status === 'inactive') query.isActive = false;
     if (search) {
       query.$or = [
@@ -1014,8 +1013,9 @@ export const getUsers = async (req, res) => {
         role: u.role,
         createdAt: u.createdAt,
         targetRole: p?.career?.targetRole || p?.targetRole || 'Not Set',
-        degree: p?.education?.degree || 'Not Set',
-        college: p?.education?.college || '',
+        degree: p?.personal?.degree || 'Not Set',
+        college: p?.personal?.college || '',
+        graduationYear: p?.academics?.graduationYear || 'Not Set',
         skillMatch: p?.readiness?.skillMatchScore ?? 0,
         readinessScore: p?.readiness?.readinessScore ?? 0,
         interviewScore: p?.readiness?.interviewScore ?? 0,

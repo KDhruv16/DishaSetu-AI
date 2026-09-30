@@ -324,19 +324,19 @@ export const AdminUsersPage = () => {
               <div className="grid grid-cols-2 gap-2 text-slate-700">
                 <div>
                   <span className="text-slate-500">Degree:</span>{' '}
-                  <strong className="font-semibold">{selectedUser.profile?.education?.degree || 'Not Set'}</strong>
+                  <strong className="font-semibold">{selectedUser.profile?.personal?.degree || 'Not Set'}</strong>
                 </div>
                 <div>
                   <span className="text-slate-500">College:</span>{' '}
-                  <strong className="font-semibold">{selectedUser.profile?.education?.college || 'Not Set'}</strong>
+                  <strong className="font-semibold">{selectedUser.profile?.personal?.college || 'Not Set'}</strong>
                 </div>
                 <div>
                   <span className="text-slate-500">Branch:</span>{' '}
-                  <strong className="font-semibold">{selectedUser.profile?.education?.branch || 'Not Set'}</strong>
+                  <strong className="font-semibold">{selectedUser.profile?.personal?.branch || 'Not Set'}</strong>
                 </div>
                 <div>
                   <span className="text-slate-500">Graduation Year:</span>{' '}
-                  <strong className="font-semibold">{selectedUser.profile?.education?.graduationYear || 'Not Set'}</strong>
+                  <strong className="font-semibold">{selectedUser.profile?.academics?.graduationYear || 'Not Set'}</strong>
                 </div>
               </div>
             </div>

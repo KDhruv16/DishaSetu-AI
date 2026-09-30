@@ -47,6 +47,7 @@ export const InterviewPage = () => {
   const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
   const [currentAnswer, setCurrentAnswer] = useState('');
   const [currentEval, setCurrentEval] = useState(null);
+  const [evaluationSource, setEvaluationSource] = useState(null);
 
   // Fetch latest saved interview on mount
   useEffect(() => {
@@ -124,6 +125,7 @@ export const InterviewPage = () => {
       if (res.data?.success && res.data.interview) {
         setInterview(res.data.interview);
         setCurrentEval(res.data.currentEvaluation);
+        setEvaluationSource(res.data.evaluationSource || 'gemini');
         setEvalError(false);
       } else {
         setEvalError(true);
@@ -147,6 +149,7 @@ export const InterviewPage = () => {
   const handleNextQuestion = () => {
     setCurrentAnswer('');
     setCurrentEval(null);
+    setEvaluationSource(null);
     setError(null);
     setEvalError(false);
     setCurrentQuestionIdx((prev) => prev + 1);
@@ -156,6 +159,7 @@ export const InterviewPage = () => {
   const handleRestart = () => {
     setInterview(null);
     setCurrentEval(null);
+    setEvaluationSource(null);
     setCurrentAnswer('');
     setCurrentQuestionIdx(0);
     setError(null);
@@ -369,14 +373,17 @@ export const InterviewPage = () => {
                       rows={5}
                       value={currentAnswer}
                       onChange={(e) => setCurrentAnswer(e.target.value)}
+                      onPaste={(e) => e.preventDefault()}
+                      onDrop={(e) => e.preventDefault()}
+                      onContextMenu={(e) => e.preventDefault()}
                       placeholder="Type your response clearly. Explain concepts, architectural trade-offs, and practical examples..."
-                      className="w-full bg-white border border-slate-200 rounded-xl p-4 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 leading-relaxed"
+                      className="w-full bg-white border border-slate-200 rounded-xl p-4 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 leading-relaxed select-none"
                     />
                   </div>
 
                   <div className="flex items-center justify-between pt-2">
-                    <span className="text-xs text-slate-400">
-                      Take your time. Answer as you would in an actual interview.
+                    <span className="text-[11px] text-slate-500">
+                      Type your answer in your own words. Pasting is disabled during the interview.
                     </span>
 
                     <Button
@@ -415,19 +422,28 @@ export const InterviewPage = () => {
                       </span>
                     </div>
 
-                    <div className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
-                      <span>Evidence:</span>
-                      <span
-                        className={`font-bold uppercase text-[11px] px-2 py-0.5 rounded-md ${
-                          currentEval.skillEvidence === 'strong'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : currentEval.skillEvidence === 'moderate'
-                            ? 'bg-amber-100 text-amber-800'
-                            : 'bg-rose-100 text-rose-800'
-                        }`}
-                      >
-                        {currentEval.skillEvidence || 'insufficient'}
-                      </span>
+                    <div className="flex flex-col items-end gap-2">
+                      <div className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                        <span>Evidence:</span>
+                        <span
+                          className={`font-bold uppercase text-[11px] px-2 py-0.5 rounded-md ${
+                            currentEval.skillEvidence === 'strong'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : currentEval.skillEvidence === 'moderate'
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-rose-100 text-rose-800'
+                          }`}
+                        >
+                          {currentEval.skillEvidence || 'insufficient'}
+                        </span>
+                      </div>
+                      
+                      {evaluationSource === 'local_fallback' && (
+                        <div className="flex items-center gap-1 text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                          <AlertCircle className="w-3 h-3" />
+                          Evaluation completed using backup evaluator
+                        </div>
+                      )}
                     </div>
                   </div>
 

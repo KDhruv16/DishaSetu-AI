@@ -390,7 +390,8 @@ export const evaluateStudentAnswer = async (
   studentAnswer,
   role = 'Data Analyst',
   type = 'Technical',
-  difficulty = 'Medium'
+  difficulty = 'Medium',
+  targetSkill = ''
 ) => {
   if (!studentAnswer || !studentAnswer.trim()) {
     throw new Error('Please provide an answer to evaluate.');
@@ -440,7 +441,8 @@ export const evaluateStudentAnswer = async (
     role,
     type,
     difficulty,
-    expectedRubric
+    expectedRubric,
+    targetSkill
   );
 };
 
