@@ -238,7 +238,7 @@ export const getTargetRoles = async (req, res) => {
 
 export const createTargetRole = async (req, res) => {
   try {
-    const { name, category, description, isActive, order } = req.body;
+    const { name, category, categoryId, description, isActive, order } = req.body;
     if (!name || !name.trim()) {
       return res.status(400).json({ success: false, message: 'Target role name is required.' });
     }
@@ -251,6 +251,7 @@ export const createTargetRole = async (req, res) => {
     const item = await TargetRole.create({
       name: name.trim(),
       category: category?.trim() || 'Engineering',
+      categoryId: categoryId || undefined,
       description: description?.trim() || '',
       isActive: isActive !== false,
       order: Number(order) || 0,
@@ -268,7 +269,7 @@ export const createTargetRole = async (req, res) => {
 export const updateTargetRole = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, category, description, isActive, order } = req.body;
+    const { name, category, categoryId, description, isActive, order } = req.body;
 
     const item = await TargetRole.findById(id);
     if (!item) return res.status(404).json({ success: false, message: 'Target role not found.' });
@@ -282,6 +283,7 @@ export const updateTargetRole = async (req, res) => {
     }
 
     if (category !== undefined) item.category = category.trim();
+    if (categoryId !== undefined) item.categoryId = categoryId;
     if (description !== undefined) item.description = description.trim();
     if (isActive !== undefined) item.isActive = isActive;
     if (order !== undefined) item.order = Number(order);

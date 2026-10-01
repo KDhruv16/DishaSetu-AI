@@ -18,9 +18,13 @@ import organizationRoutes from './routes/organizationRoutes.js';
 import applicationRoutes from './routes/applicationRoutes.js';
 import candidateInterviewRoutes from './routes/candidateInterviewRoutes.js';
 import candidateHiringRoutes from './routes/candidateHiringRoutes.js';
+import careerInterestRoutes from './routes/careerInterestRoutes.js';
+import industryCategoryRoutes from './routes/industryCategoryRoutes.js';
 import { seedOpportunities } from './seed/opportunities.js';
 import { seedCourses } from './seed/courses.js';
 import { seedDemoProfile } from './seed/demoProfile.js';
+import { seedCareerInterests } from './seed/careerInterests.js';
+import { seedIndustryCategories } from './seed/industryCategories.js';
 
 // Load environment variables
 dotenv.config();
@@ -30,6 +34,8 @@ connectDB().then(() => {
   seedOpportunities();
   seedCourses();
   seedDemoProfile();
+  seedCareerInterests();
+  seedIndustryCategories();
 });
 
 
@@ -72,6 +78,8 @@ app.use('/api/organization', organizationRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/candidate/interviews', candidateInterviewRoutes);
 app.use('/api/candidate/hiring', candidateHiringRoutes);
+app.use('/api/master-data/career-interests', careerInterestRoutes);
+app.use('/api/master-data/industry-categories', industryCategoryRoutes);
 
 
 

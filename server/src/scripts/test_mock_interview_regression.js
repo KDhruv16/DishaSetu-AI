@@ -4,6 +4,7 @@
  */
 
 import { evaluateStudentAnswer } from '../services/interviewService.js';
+import { evaluateLocalFallback } from '../services/interviewEvaluator.js';
 
 const regressionTestCases = [
   // -------------------------------------------------------------------------
@@ -135,6 +136,31 @@ const regressionTestCases = [
     minScore: 80,
     rationale: 'Accurate technical definition covering data bundling and access control modifiers.',
   },
+  {
+    id: 'Test 13: Technically correct but answers a different question',
+    question: 'Explain the Node.js Event Loop mechanism and how it achieves non-blocking asynchronous I/O with single-threaded execution.',
+    answer: 'javascript is the scripting language which is used to write business logic and it is not used to build server and node.js is the run time environment which is used to javascript outside the terminal',
+    expectedStatus: 'INSUFFICIENT',
+    maxScore: 40,
+    rationale: 'Answers what Node/JS are instead of explaining the event loop. Technically true statements but completely fails to answer the question asked.',
+  },
+  {
+    id: 'Test 14: Empty/very short answer',
+    question: 'Explain polymorphism in Java.',
+    answer: 'It is',
+    expectedStatus: 'INSUFFICIENT',
+    maxScore: 15,
+    rationale: 'Very short answer must be rejected.',
+  },
+  {
+    id: 'Test 15: Gemini failure / API failure (Local Fallback)',
+    question: 'Explain polymorphism in Java.',
+    answer: 'Polymorphism allows the same interface to represent different implementations. In Java, method overriding demonstrates runtime polymorphism.',
+    expectedStatus: 'INSUFFICIENT',
+    maxScore: 30,
+    rationale: 'Fallback evaluator cannot verify correctness semantically, so it must return a conservative INSUFFICIENT score.',
+    useFallback: true,
+  },
 
   // -------------------------------------------------------------------------
   // ADVERSARIAL & ANTI-MANIPULATION SCENARIOS
@@ -220,13 +246,18 @@ async function runRegressionSuite() {
     console.log(`  Answer   : "${tc.answer}"`);
 
     try {
-      const result = await evaluateStudentAnswer(
-        tc.question,
-        tc.answer,
-        'Full Stack Developer',
-        'Technical',
-        'Medium'
-      );
+      let result;
+      if (tc.useFallback) {
+        result = evaluateLocalFallback(tc.question, tc.answer);
+      } else {
+        result = await evaluateStudentAnswer(
+          tc.question,
+          tc.answer,
+          'Full Stack Developer',
+          'Technical',
+          'Medium'
+        );
+      }
 
       console.log(`  -> Status: ${result.answerStatus} | Score: ${result.score}/100 | Verdict: ${result.verdict}`);
       console.log(`  -> Evidence: ${result.skillEvidence} | Tech: ${result.scores.technicalAccuracy}% | Comp: ${result.scores.completeness}% | Rel: ${result.scores.relevance}%`);

@@ -54,6 +54,7 @@ export const OnboardingPage = () => {
   const [educations, setEducations] = useState([]);
   const [targetRoles, setTargetRoles] = useState(DEFAULT_TARGET_ROLES);
   const [availableSkills, setAvailableSkills] = useState(DEFAULT_POPULAR_SKILLS);
+  const [careerInterests, setCareerInterests] = useState([]);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -101,6 +102,15 @@ export const OnboardingPage = () => {
         }
       } catch (err) {
         console.warn('Meta options load note:', err.message);
+      }
+
+      try {
+        const res = await (await import('../utils/api')).default.get('/master-data/career-interests/active');
+        if (res.data?.success && Array.isArray(res.data.data)) {
+          setCareerInterests(res.data.data);
+        }
+      } catch (err) {
+        console.warn('Career interests load note:', err.message);
       }
     };
     loadMeta();
@@ -485,11 +495,24 @@ export const OnboardingPage = () => {
                       onChange={(e) => setFormData({ ...formData, careerInterest: e.target.value })}
                       className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
                     >
-                      <option>Software Development & Web Technologies</option>
-                      <option>Data Science, AI & Machine Learning</option>
-                      <option>Cloud Computing, DevOps & Infrastructure</option>
-                      <option>Government & Public Sector Tech Exams (MP Online / SSC)</option>
-                      <option>Cybersecurity & Network Defense</option>
+                      {careerInterests.length > 0 ? (
+                        careerInterests.map((interest) => (
+                          <option key={interest._id} value={interest.name}>
+                            {interest.name}
+                          </option>
+                        ))
+                      ) : (
+                        <>
+                          <option>Software Development & Web Technologies</option>
+                          <option>Data Science, AI & Machine Learning</option>
+                          <option>Cloud Computing, DevOps & Infrastructure</option>
+                          <option>Government & Public Sector Tech Exams (MP Online / SSC)</option>
+                          <option>Cybersecurity & Network Defense</option>
+                        </>
+                      )}
+                      {careerInterests.length > 0 && formData.careerInterest && !careerInterests.some(ci => ci.name === formData.careerInterest) && (
+                        <option value={formData.careerInterest}>{formData.careerInterest}</option>
+                      )}
                     </select>
                   </div>
                 </motion.div>

@@ -36,6 +36,8 @@ import { AdminLoginPage } from '../pages/admin/AdminLoginPage';
 import { AdminDashboardPage } from '../pages/admin/AdminDashboardPage';
 import { AdminEducationPage } from '../pages/admin/AdminEducationPage';
 import { AdminRolesPage } from '../pages/admin/AdminRolesPage';
+import { AdminCareerInterestsPage } from '../pages/admin/AdminCareerInterestsPage';
+import { AdminIndustryCategoriesPage } from '../pages/admin/AdminIndustryCategoriesPage';
 import { AdminSkillsPage } from '../pages/admin/AdminSkillsPage';
 import { AdminRoleSkillsPage } from '../pages/admin/AdminRoleSkillsPage';
 import { AdminQuestionsPage } from '../pages/admin/AdminQuestionsPage';
@@ -93,6 +95,8 @@ export const AppRoutes = () => {
           <Route path="/admin" element={<AdminDashboardPage />} />
           <Route path="/admin/education" element={<AdminEducationPage />} />
           <Route path="/admin/roles" element={<AdminRolesPage />} />
+          <Route path="/admin/career-interests" element={<AdminCareerInterestsPage />} />
+          <Route path="/admin/industry-categories" element={<AdminIndustryCategoriesPage />} />
           <Route path="/admin/skills" element={<AdminSkillsPage />} />
           <Route path="/admin/role-skills" element={<AdminRoleSkillsPage />} />
           <Route path="/admin/questions" element={<AdminQuestionsPage />} />

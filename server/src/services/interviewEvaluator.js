@@ -36,6 +36,14 @@ QUESTION: "${questionText}"
 CANDIDATE ANSWER: "${cleanAnswer}"
 ${targetSkill ? `TARGET SKILL: "${targetSkill}"\nNote: A correct answer for a different skill must NOT be considered valid for this target skill.` : ''}
 
+IMPLEMENT QUESTION-SPECIFIC REQUIREMENT MATCHING:
+1. Extract the key concepts/requirements that must be addressed based on the exact QUESTION asked.
+2. Compare the CANDIDATE ANSWER against those requirements.
+3. Determine whether the answer actually addresses the asked question. Answer this question before assigning a positive verdict: "Did the candidate actually answer the question that was asked?"
+4. Detect topic drift / unrelated technically-correct answers.
+5. Penalize answers that explain a related technology but fail to answer the actual question.
+6. Do not give a GOOD or EXCELLENT verdict merely because the answer is technically correct in isolation. If it doesn't answer the specific question, it is INSUFFICIENT or POOR.
+
 Do not give credit simply because:
 - the answer contains keywords from the question
 - the answer contains technical words
@@ -68,7 +76,7 @@ Return STRICT JSON matching exactly this schema:
 }`;
 
   const models = [
-    process.env.GEMINI_MODEL || 'gemini-3.8-flash'
+    process.env.GEMINI_MODEL || 'gemini-1.5-flash'
   ];
 
   let rawJson = null;
@@ -218,11 +226,11 @@ export const evaluateLocalFallback = (questionText, studentAnswer) => {
   if (ans.length < 15 || !ans.includes(' ')) {
     return {
       ...emptyResponse,
-      score: 10,
+      score: 0,
       validityReason: 'The answer is too short or appears to be random characters.',
       feedback: 'The answer is too short or appears to be random characters.',
       weaknesses: ['Too short or random characters'],
-      scores: { ...emptyResponse.scores, overall: 10 }
+      scores: { ...emptyResponse.scores, overall: 0 }
     };
   }
 
@@ -238,7 +246,7 @@ export const evaluateLocalFallback = (questionText, studentAnswer) => {
       isMeaningfulAnswer: false,
       isQuestionRestatement: false,
       validityReason: 'The answer does not seem to address the core concepts of the question.',
-      score: 30,
+      score: 15,
       verdict: 'INCORRECT',
       skillEvidence: 'insufficient',
       feedback: 'The answer does not seem to address the core concepts of the question.',
@@ -249,71 +257,43 @@ export const evaluateLocalFallback = (questionText, studentAnswer) => {
       howToImprove: ['Focus on the specific concepts asked in the question.'],
       betterApproach: '',
       scores: {
-        technicalAccuracy: 30,
-        completeness: 30,
-        clarity: 50,
-        communicationClarity: 50,
-        relevance: 20,
-        depth: 30,
-        correctness: 30,
-        overall: 30,
+        technicalAccuracy: 15,
+        completeness: 10,
+        clarity: 30,
+        communicationClarity: 30,
+        relevance: 10,
+        depth: 10,
+        correctness: 10,
+        overall: 15,
       }
     };
   }
 
-  if (ans.length < 60) {
-    return {
-      answerStatus: 'VALID',
-      isMeaningfulAnswer: true,
-      isQuestionRestatement: false,
-      validityReason: 'The answer is relevant but lacks depth and detail.',
-      score: 60,
-      verdict: 'PARTIAL',
-      skillEvidence: 'moderate',
-      feedback: 'The answer is relevant but lacks depth and detail.',
-      strengths: ['Addressed the topic'],
-      whatWentWell: ['Addressed the topic'],
-      weaknesses: ['Lacks detail'],
-      whatIsMissing: ['Detailed explanation', 'Practical examples'],
-      howToImprove: ['Provide more detailed explanations and practical examples.'],
-      betterApproach: '',
-      scores: {
-        technicalAccuracy: 60,
-        completeness: 50,
-        clarity: 70,
-        communicationClarity: 70,
-        relevance: 70,
-        depth: 60,
-        correctness: 60,
-        overall: 60,
-      }
-    };
-  }
-
+  // Backup evaluator conservative fallback
   return {
-    answerStatus: 'VALID',
+    answerStatus: 'INSUFFICIENT',
     isMeaningfulAnswer: true,
     isQuestionRestatement: false,
-    validityReason: 'The answer is highly detailed and addresses the core requirements of the question.',
-    score: 75,
-    verdict: 'GOOD',
-    skillEvidence: 'strong',
-    feedback: 'The answer is highly detailed and addresses the core requirements of the question.',
-    strengths: ['Detailed explanation', 'Addressed core concepts'],
-    whatWentWell: ['Detailed explanation', 'Addressed core concepts'],
-    weaknesses: [],
-    whatIsMissing: [],
-    howToImprove: [],
+    validityReason: 'Evaluation completed using backup evaluator. Insufficient evidence to prove the answer addresses the question.',
+    score: 25,
+    verdict: 'INSUFFICIENT',
+    skillEvidence: 'insufficient',
+    feedback: 'Evaluation completed using backup evaluator. Please provide more detailed explanations that directly address the specific question.',
+    strengths: ['Attempted to address the topic'],
+    whatWentWell: ['Attempted to address the topic'],
+    weaknesses: ['Unverified technical depth'],
+    whatIsMissing: ['Detailed specific explanation'],
+    howToImprove: ['Ensure all aspects of the question are thoroughly answered with specific technical details.'],
     betterApproach: '',
     scores: {
-      technicalAccuracy: 75,
-      completeness: 70,
-      clarity: 75,
-      communicationClarity: 75,
-      relevance: 80,
-      depth: 75,
-      correctness: 75,
-      overall: 75,
+      technicalAccuracy: 25,
+      completeness: 20,
+      clarity: 50,
+      communicationClarity: 50,
+      relevance: 30,
+      depth: 20,
+      correctness: 25,
+      overall: 25,
     }
   };
 };

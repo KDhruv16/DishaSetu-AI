@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Edit, Trash2, MapPin, Briefcase, Calendar, Loader, AlertCircle, Eye } from 'lucide-react';
+import { Plus, Edit, Trash2, MapPin, Briefcase, Calendar, Loader, AlertCircle, Eye, Send } from 'lucide-react';
 import api from '../../utils/api';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
@@ -10,6 +10,7 @@ export const OrganizationOpportunitiesPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [filter, setFilter] = useState('All');
+  const [publishingId, setPublishingId] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -49,6 +50,28 @@ export const OrganizationOpportunitiesPage = () => {
       alert(err.response?.data?.message || 'Error deleting opportunity');
     }
   };
+
+  const handlePublish = async (opp) => {
+    if (!window.confirm('Publish this opportunity?\n\nOnce published, candidates will be able to view and apply to this opportunity.')) {
+      return;
+    }
+
+    setPublishingId(opp._id);
+    try {
+      const payload = { ...opp, status: 'published' };
+      const res = await api.put(`/organization/opportunities/${opp._id}`, payload);
+      if (res.data?.success) {
+        setOpportunities(opportunities.map(o => o._id === opp._id ? { ...o, status: 'published' } : o));
+      } else {
+        alert(res.data?.message || 'Failed to publish opportunity');
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || 'Error publishing opportunity');
+    } finally {
+      setPublishingId(null);
+    }
+  };
+
 
   const filteredOpportunities = opportunities.filter(opp => {
     if (filter === 'All') return true;
@@ -178,6 +201,23 @@ export const OrganizationOpportunitiesPage = () => {
 
               {/* Card Footer Actions */}
               <div className="bg-slate-50/80 px-4 py-3 border-t border-slate-100 flex justify-end gap-2">
+                {opp.status === 'draft' && (
+                  <Button
+                    type="button"
+                    onClick={() => handlePublish(opp)}
+                    variant="primary"
+                    size="sm"
+                    disabled={publishingId === opp._id}
+                    className="font-semibold text-xs shadow-none bg-brand-600 hover:bg-brand-700 text-white disabled:opacity-50"
+                  >
+                    {publishingId === opp._id ? (
+                      <Loader className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                    ) : (
+                      <Send className="w-3.5 h-3.5 mr-1.5" />
+                    )}
+                    {publishingId === opp._id ? 'Publishing...' : 'Publish'}
+                  </Button>
+                )}
                 <Button
                   type="button"
                   onClick={() => navigate(`/organization/opportunities/edit/${opp._id}`)}

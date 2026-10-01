@@ -13,6 +13,10 @@ const targetRoleSchema = new mongoose.Schema(
       default: 'Engineering',
       trim: true,
     },
+    categoryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'IndustryCategory',
+    },
     description: {
       type: String,
       default: '',
