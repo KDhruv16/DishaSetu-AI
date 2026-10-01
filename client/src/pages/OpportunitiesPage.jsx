@@ -762,10 +762,10 @@ export const OpportunitiesPage = () => {
                     <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-[10px] text-slate-400 font-bold uppercase">Skills (60%)</span>
-                        <span className="font-bold text-slate-800">{activeOp.breakdown.skillScore}/60</span>
+                        <span className="font-bold text-slate-800">{typeof activeOp.breakdown.skillScore === 'number' ? `${activeOp.breakdown.skillScore}/60` : 'Not specified'}</span>
                       </div>
                       <div className="w-full bg-slate-200 rounded-full h-1">
-                        <div className="bg-brand-600 h-1 rounded-full" style={{ width: `${(activeOp.breakdown.skillScore / 60) * 100}%` }} />
+                        <div className="bg-brand-600 h-1 rounded-full" style={{ width: `${typeof activeOp.breakdown.skillScore === 'number' ? (activeOp.breakdown.skillScore / 60) * 100 : 0}%` }} />
                       </div>
                     </div>
 
@@ -825,7 +825,7 @@ export const OpportunitiesPage = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-brand-100">
                   <div>
                     <span className="text-[11px] font-bold text-emerald-800 uppercase block mb-1">
-                      ✓ Your Matched Skills ({activeOp.matchedSkills?.length || 0})
+                      ✓ Your Matched Skills {activeOp.skills?.length > 0 ? `(${activeOp.matchedSkills?.length || 0})` : ''}
                     </span>
                     <div className="flex flex-wrap gap-1">
                       {activeOp.matchedSkills?.length > 0 ? (
@@ -837,6 +837,10 @@ export const OpportunitiesPage = () => {
                             {s}
                           </span>
                         ))
+                      ) : activeOp.skills?.length === 0 || !activeOp.skills ? (
+                        <span className="text-[11px] text-slate-500 italic">
+                          No required skills specified for this opportunity.
+                        </span>
                       ) : (
                         <span className="text-[11px] text-slate-500 italic">
                           No exact skill overlap found
@@ -847,7 +851,7 @@ export const OpportunitiesPage = () => {
 
                   <div>
                     <span className="text-[11px] font-bold text-amber-800 uppercase block mb-1">
-                      ⚠ Skills To Improve ({activeOp.missingSkills?.length || 0})
+                      ⚠ Skills To Improve {activeOp.skills?.length > 0 ? `(${activeOp.missingSkills?.length || 0})` : ''}
                     </span>
                     <div className="flex flex-wrap gap-1">
                       {activeOp.missingSkills?.length > 0 ? (
@@ -859,6 +863,10 @@ export const OpportunitiesPage = () => {
                             {s}
                           </span>
                         ))
+                      ) : activeOp.skills?.length === 0 || !activeOp.skills ? (
+                        <span className="text-[11px] text-slate-500 italic">
+                          No skill requirements were provided by the organization.
+                        </span>
                       ) : (
                         <span className="text-[11px] text-emerald-700 font-medium">
                           You meet all required skills!
@@ -892,7 +900,7 @@ export const OpportunitiesPage = () => {
                       <div key={key} className="p-2.5 rounded-xl bg-white/10 border border-white/10">
                         <span className="text-[10px] text-slate-400 block truncate">{f.label}</span>
                         <div className="flex items-center gap-1.5 mt-1">
-                          <span className={`w-2 h-2 rounded-full ${f.met ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                          <span className={`w-2 h-2 rounded-full ${f.met === null || f.met === undefined ? 'bg-slate-400' : f.met ? 'bg-emerald-400' : 'bg-amber-400'}`} />
                           <span className="font-bold text-white truncate text-[11px]">{f.status}</span>
                         </div>
                       </div>

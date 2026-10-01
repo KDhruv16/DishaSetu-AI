@@ -19,6 +19,7 @@ import {
   ExternalLink,
   Briefcase,
   Layers,
+  Tags,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -29,6 +30,7 @@ const ADMIN_NAV_ITEMS = [
   { name: 'Industry Categories', path: '/admin/industry-categories', icon: Layers },
   { name: 'Career Interests', path: '/admin/career-interests', icon: Briefcase },
   { name: 'Skills', path: '/admin/skills', icon: Cpu },
+  { name: 'Skill Categories', path: '/admin/skill-categories', icon: Tags },
   { name: 'Role-Skill Mapping', path: '/admin/role-skills', icon: GitFork },
   { name: 'Interview Questions', path: '/admin/questions', icon: HelpCircle },
   { name: 'Learning Content', path: '/admin/learning', icon: BookOpen },

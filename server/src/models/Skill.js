@@ -20,6 +20,10 @@ const skillSchema = new mongoose.Schema(
       default: 'Technical',
       trim: true,
     },
+    categoryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'SkillCategory',
+    },
     description: {
       type: String,
       default: '',

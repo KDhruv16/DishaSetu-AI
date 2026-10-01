@@ -64,7 +64,7 @@ export const calculateOpportunityMatch = (opportunity, profile) => {
   const skillScore =
     oppSkills.length > 0
       ? Math.round((matchedSkills.length / oppSkills.length) * 60)
-      : 30; // fallback if no skills specified
+      : 'Not specified';
 
   // 2. Career Role & Category Match (20%)
   let roleScore = 0;
@@ -141,7 +141,12 @@ export const calculateOpportunityMatch = (opportunity, profile) => {
     expScore = 7;
   }
 
-  const matchPercentage = Math.min(100, Math.max(15, skillScore + roleScore + eduScore + expScore));
+  let matchPercentage;
+  if (oppSkills.length > 0) {
+    matchPercentage = Math.min(100, Math.max(15, skillScore + roleScore + eduScore + expScore));
+  } else {
+    matchPercentage = Math.round(((roleScore + eduScore + expScore) / 40) * 100);
+  }
 
   // 5. Deterministic Explainable Reasons (Why it matches)
   const reasons = [];
@@ -219,7 +224,7 @@ export const calculateApplicationReadiness = (opportunity, profile, resumeAnalys
 
   const totalReqSkills = (opportunity.skills || []).length;
   const matchedSkillsCount = match.matchedSkills.length;
-  const skillCoveragePct = totalReqSkills > 0 ? Math.round((matchedSkillsCount / totalReqSkills) * 100) : 100;
+  const skillCoveragePct = totalReqSkills > 0 ? Math.round((matchedSkillsCount / totalReqSkills) * 100) : 'Not specified';
 
   const atsScore = resumeAnalysis?.atsScore?.overall || 0;
   const isResumeReady = atsScore >= 60;
@@ -230,13 +235,21 @@ export const calculateApplicationReadiness = (opportunity, profile, resumeAnalys
   const isInterviewReady = interviewScore >= 60;
 
   // Opportunity-specific readiness score (0-100)
-  // Skill match: 40%, Profile: 20%, Resume: 20%, Interview: 20%
-  const readinessScore = Math.round(
-    (skillCoveragePct * 0.40) +
-    (isProfileComplete ? 20 : 5) +
-    (isResumeReady ? (atsScore * 0.20) : 5) +
-    (isInterviewReady ? (interviewScore * 0.20) : 5)
-  );
+  let readinessScore = 0;
+  if (totalReqSkills > 0) {
+    readinessScore = Math.round(
+      (skillCoveragePct * 0.40) +
+      (isProfileComplete ? 20 : 5) +
+      (isResumeReady ? (atsScore * 0.20) : 5) +
+      (isInterviewReady ? (interviewScore * 0.20) : 5)
+    );
+  } else {
+    // If no required skills, calculate based on the remaining 60 points and scale to 100%
+    const earned = (isProfileComplete ? 20 : 5) +
+                   (isResumeReady ? (atsScore * 0.20) : 5) +
+                   (isInterviewReady ? (interviewScore * 0.20) : 5);
+    readinessScore = Math.round((earned / 60) * 100);
+  }
 
   let statusLabel = 'Preparation Recommended';
   let canApplyNow = false;
@@ -305,9 +318,9 @@ export const calculateApplicationReadiness = (opportunity, profile, resumeAnalys
       },
       skills: {
         label: 'Skill Match Coverage',
-        status: `${skillCoveragePct}% (${matchedSkillsCount}/${totalReqSkills || 0})`,
-        score: skillCoveragePct,
-        met: skillCoveragePct >= 60,
+        status: totalReqSkills > 0 ? `${skillCoveragePct}% (${matchedSkillsCount}/${totalReqSkills})` : 'Not specified',
+        score: totalReqSkills > 0 ? skillCoveragePct : null,
+        met: totalReqSkills > 0 ? skillCoveragePct >= 60 : null,
       },
       resume: {
         label: 'ATS Resume Ready',
