@@ -1,16 +1,69 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { Briefcase, Users, MessageSquare, CheckCircle } from 'lucide-react';
+import { Briefcase, Users, MessageSquare, CheckCircle, FileText } from 'lucide-react';
+import api from '../../utils/api';
 
 export const OrganizationDashboardPage = () => {
   const { user } = useAuth();
 
+  const [statsData, setStatsData] = useState({
+    activeOps: 0,
+    totalApps: 0,
+    shortlisted: 0,
+    selected: 0,
+    offersSent: 0,
+    accepted: 0,
+    hired: 0
+  });
+
+  const [hiringRecords, setHiringRecords] = useState([]);
+  
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const [appsRes, opsRes, hiringRes] = await Promise.all([
+          api.get('/organization/applications'),
+          api.get('/organization/opportunities'),
+          api.get('/organization/hiring')
+        ]);
+        
+        let apps = appsRes.data?.data || [];
+        let ops = opsRes.data?.data || [];
+        let hires = hiringRes.data?.data || [];
+        
+        setHiringRecords(hires);
+
+        setStatsData({
+          activeOps: ops.filter(o => o.status === 'published').length,
+          totalApps: apps.length,
+          shortlisted: apps.filter(a => a.status === 'shortlisted').length,
+          selected: apps.filter(a => a.status === 'selected').length,
+          offersSent: hires.filter(h => h.status === 'offer_sent').length,
+          accepted: hires.filter(h => h.status === 'accepted').length,
+          hired: hires.filter(h => h.status === 'hired').length
+        });
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    fetchStats();
+  }, []);
+
+  const handleMarkHired = async (id) => {
+    try {
+      await api.patch(`/organization/hiring/${id}/status`, { status: 'hired' });
+      alert('Candidate marked as hired!');
+      window.location.reload();
+    } catch (e) {
+      alert('Failed to update status');
+    }
+  }
+
   const stats = [
-    { label: 'Active Opportunities', value: '0', icon: Briefcase, color: 'text-blue-600', bg: 'bg-blue-100' },
-    { label: 'Total Applications', value: '0', icon: Users, color: 'text-indigo-600', bg: 'bg-indigo-100' },
-    { label: 'Shortlisted', value: '0', icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-100' },
-    { label: 'Interviews', value: '0', icon: MessageSquare, color: 'text-purple-600', bg: 'bg-purple-100' },
-    { label: 'Hired', value: '0', icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-100' },
+    { label: 'Selected Candidates', value: statsData.selected, icon: CheckCircle, color: 'text-indigo-600', bg: 'bg-indigo-100' },
+    { label: 'Offers Sent', value: statsData.offersSent, icon: FileText, color: 'text-brand-600', bg: 'bg-brand-100' },
+    { label: 'Accepted', value: statsData.accepted, icon: Users, color: 'text-emerald-600', bg: 'bg-emerald-100' },
+    { label: 'Hired', value: statsData.hired, icon: Briefcase, color: 'text-purple-600', bg: 'bg-purple-100' },
   ];
 
   return (
@@ -20,7 +73,8 @@ export const OrganizationDashboardPage = () => {
         <p className="text-gray-600 mt-1">Welcome, {user?.name}</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-8">
+      <h2 className="text-xl font-bold mb-4">Hiring Pipeline</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         {stats.map((stat) => (
           <div key={stat.label} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex flex-col items-center text-center">
             <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-4 ${stat.bg}`}>
@@ -32,13 +86,28 @@ export const OrganizationDashboardPage = () => {
         ))}
       </div>
 
-      <div className="bg-primary/5 rounded-xl border border-primary/20 p-8 text-center">
-        <div className="max-w-2xl mx-auto">
-          <h2 className="text-lg font-bold text-primary mb-2">Welcome to DishaSetu AI Organization Portal</h2>
-          <p className="text-gray-600 mb-6">
-            Phase 1 is currently active. Please complete your Organization Profile to proceed. Opportunity creation, candidate evaluation, and hiring workflows will be unlocked in upcoming phases.
-          </p>
-        </div>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <h2 className="text-lg font-bold mb-4">Recent Hiring Records</h2>
+        {hiringRecords.length > 0 ? (
+          <div className="space-y-4">
+            {hiringRecords.map(record => (
+              <div key={record._id} className="flex items-center justify-between p-4 border rounded-xl bg-gray-50">
+                <div>
+                  <p className="font-bold">{record.candidate?.name}</p>
+                  <p className="text-sm text-gray-600">{record.opportunity?.title}</p>
+                  <p className="text-xs font-semibold uppercase text-brand-600 mt-1">Status: {record.status.replace('_', ' ')}</p>
+                </div>
+                {record.status === 'accepted' && (
+                  <button onClick={() => handleMarkHired(record._id)} className="px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg text-sm">
+                    Complete Hiring
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-gray-500">No offers sent yet.</p>
+        )}
       </div>
     </div>
   );

@@ -12,6 +12,7 @@ import { LearningPage } from '../pages/LearningPage';
 import { OpportunitiesPage } from '../pages/OpportunitiesPage';
 import { ResumePage } from '../pages/ResumePage';
 import { InterviewPage } from '../pages/InterviewPage';
+import { CandidateInterviewsPage } from '../pages/candidate/CandidateInterviewsPage';
 import { CareerAssistantPage } from '../pages/CareerAssistantPage';
 import { AnalyticsPage } from '../pages/AnalyticsPage';
 import { ProtectedRoute } from '../components/common/ProtectedRoute';
@@ -22,6 +23,11 @@ import { OrganizationRoute } from '../components/organization/OrganizationRoute'
 import { OrganizationLayout } from '../components/organization/OrganizationLayout';
 import { OrganizationDashboardPage } from '../pages/organization/OrganizationDashboardPage';
 import { OrganizationProfilePage } from '../pages/organization/OrganizationProfilePage';
+import { OrganizationOpportunitiesPage } from '../pages/organization/OrganizationOpportunitiesPage';
+import { OrganizationCreateOpportunityPage } from '../pages/organization/OrganizationCreateOpportunityPage';
+import { OrganizationApplicationsPage } from '../pages/organization/OrganizationApplicationsPage';
+import { OrganizationCandidateReviewPage } from '../pages/organization/OrganizationCandidateReviewPage';
+import { OrganizationInterviewsPage } from '../pages/organization/OrganizationInterviewsPage';
 
 // Admin Module Components & Pages
 import { AdminRoute } from '../components/admin/AdminRoute';
@@ -63,6 +69,7 @@ export const AppRoutes = () => {
           <Route path="/opportunities" element={<OpportunitiesPage />} />
           <Route path="/resume" element={<ResumePage />} />
           <Route path="/interview" element={<InterviewPage />} />
+          <Route path="/recruitment-interviews" element={<CandidateInterviewsPage />} />
         </Route>
       </Route>
 
@@ -71,6 +78,12 @@ export const AppRoutes = () => {
         <Route element={<OrganizationLayout />}>
           <Route path="/organization" element={<OrganizationDashboardPage />} />
           <Route path="/organization/profile" element={<OrganizationProfilePage />} />
+          <Route path="/organization/opportunities" element={<OrganizationOpportunitiesPage />} />
+          <Route path="/organization/opportunities/create" element={<OrganizationCreateOpportunityPage />} />
+          <Route path="/organization/opportunities/edit/:id" element={<OrganizationCreateOpportunityPage />} />
+          <Route path="/organization/applications" element={<OrganizationApplicationsPage />} />
+          <Route path="/organization/applications/:id" element={<OrganizationCandidateReviewPage />} />
+          <Route path="/organization/interviews" element={<OrganizationInterviewsPage />} />
         </Route>
       </Route>
 

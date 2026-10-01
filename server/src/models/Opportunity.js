@@ -12,6 +12,11 @@ const opportunitySchema = new mongoose.Schema(
       required: [true, 'Please provide organization name'],
       trim: true,
     },
+    organizationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: false, // false to preserve existing dummy data
+    },
     type: {
       type: String,
       enum: ['Job', 'Internship', 'Apprenticeship', 'Government'],
@@ -27,6 +32,10 @@ const opportunitySchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    responsibilities: {
+      type: String,
+      default: '',
+    },
     location: {
       type: String,
       default: 'Bhopal / Hybrid',
@@ -41,6 +50,12 @@ const opportunitySchema = new mongoose.Schema(
       default: 'Competitive / Stipend Provided',
     },
     skills: [
+      {
+        type: String,
+        trim: true,
+      },
+    ],
+    preferredSkills: [
       {
         type: String,
         trim: true,
@@ -81,6 +96,14 @@ const opportunitySchema = new mongoose.Schema(
     isVerified: {
       type: Boolean,
       default: true,
+    },
+    status: {
+      type: String,
+      enum: ['draft', 'published', 'closed'],
+      default: 'published', // default to published for backwards compatibility
+    },
+    publishedAt: {
+      type: Date,
     },
   },
   {

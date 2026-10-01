@@ -23,8 +23,8 @@ export const AuthProvider = ({ children }) => {
             setUser(res.data.user);
             localStorage.setItem('dishasetu_user', JSON.stringify(res.data.user));
 
-            // Fetch profile if already onboarded
-            if (res.data.user.isOnboarded) {
+            // Fetch candidate profile if already onboarded and user is a candidate
+            if (res.data.user.isOnboarded && res.data.user.role === 'user') {
               try {
                 const profileRes = await api.get('/profile');
                 if (profileRes.data?.success) {
@@ -56,7 +56,7 @@ export const AuthProvider = ({ children }) => {
         setToken(token);
         setUser(user);
 
-        if (user.isOnboarded) {
+        if (user.isOnboarded && user.role === 'user') {
           try {
             const profileRes = await api.get('/profile');
             if (profileRes.data?.success) {
@@ -128,13 +128,15 @@ export const AuthProvider = ({ children }) => {
         setToken(token);
         setUser(user);
 
-        try {
-          const profileRes = await api.get('/profile');
-          if (profileRes.data?.success) {
-            setProfile(profileRes.data.profile);
+        if (user.role === 'user') {
+          try {
+            const profileRes = await api.get('/profile');
+            if (profileRes.data?.success) {
+              setProfile(profileRes.data.profile);
+            }
+          } catch (e) {
+            // ignore
           }
-        } catch (e) {
-          // ignore
         }
         return { success: true, user };
       }

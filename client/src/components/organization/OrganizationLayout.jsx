@@ -11,8 +11,8 @@ export const OrganizationLayout = () => {
   const navigation = [
     { name: 'Dashboard', href: '/organization', icon: LayoutDashboard },
     { name: 'Organization Profile', href: '/organization/profile', icon: Building2 },
-    { name: 'Opportunities', href: '/organization/opportunities', icon: Briefcase, disabled: true },
-    { name: 'Applications', href: '/organization/applications', icon: Users, disabled: true },
+    { name: 'Opportunities', href: '/organization/opportunities', icon: Briefcase },
+    { name: 'Applications', href: '/organization/applications', icon: Users },
     { name: 'Interviews', href: '/organization/interviews', icon: MessageSquare, disabled: true },
     { name: 'Settings', href: '/organization/settings', icon: Settings, disabled: true },
   ];

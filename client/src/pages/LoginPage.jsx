@@ -9,6 +9,7 @@ import { Card } from '../components/common/Card';
 export const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [role, setRole] = useState('user');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -79,7 +80,7 @@ export const LoginPage = () => {
           Welcome back
         </h2>
         <p className="mt-2 text-sm text-slate-500">
-          Sign in to check your career progress and next action steps
+          {role === 'organization' ? 'Sign in to manage your recruitment pipeline' : 'Sign in to check your career progress and next action steps'}
         </p>
       </div>
 
@@ -93,11 +94,36 @@ export const LoginPage = () => {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="flex gap-4 pb-2">
+              <label className={`flex items-center gap-2 text-sm cursor-pointer p-3 border rounded-xl flex-1 transition-colors ${role === 'user' ? 'border-brand-500 bg-brand-50 text-brand-900 font-semibold' : 'border-slate-200 text-gray-600 hover:bg-slate-50'}`}>
+                <input
+                  type="radio"
+                  name="role"
+                  value="user"
+                  checked={role === 'user'}
+                  onChange={(e) => setRole(e.target.value)}
+                  className="w-4 h-4 text-brand-600 focus:ring-brand-500 border-gray-300"
+                />
+                Candidate
+              </label>
+              <label className={`flex items-center gap-2 text-sm cursor-pointer p-3 border rounded-xl flex-1 transition-colors ${role === 'organization' ? 'border-brand-500 bg-brand-50 text-brand-900 font-semibold' : 'border-slate-200 text-gray-600 hover:bg-slate-50'}`}>
+                <input
+                  type="radio"
+                  name="role"
+                  value="organization"
+                  checked={role === 'organization'}
+                  onChange={(e) => setRole(e.target.value)}
+                  className="w-4 h-4 text-brand-600 focus:ring-brand-500 border-gray-300"
+                />
+                Organization
+              </label>
+            </div>
+
             <Input
               label="Email Address"
               id="email"
               type="email"
-              placeholder="you@college.edu or gmail.com"
+              placeholder={role === 'organization' ? "hr@company.com" : "you@college.edu or gmail.com"}
               icon={Mail}
               value={email}
               onChange={(e) => setEmail(e.target.value)}

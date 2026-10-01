@@ -49,6 +49,9 @@ export const OpportunitiesPage = () => {
   const [modalLoading, setModalLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [candidateProgress, setCandidateProgress] = useState(null);
+  const [applicationStatus, setApplicationStatus] = useState(null);
+  const [applicationDetails, setApplicationDetails] = useState(null);
+  const [applying, setApplying] = useState(false);
 
   useEffect(() => {
     fetchOpportunities();
@@ -100,15 +103,43 @@ export const OpportunitiesPage = () => {
     setSelectedOpportunity(op);
     setModalLoading(true);
     setModalIntelligence(null);
+    setApplicationStatus(null);
     try {
       const res = await api.get(`/opportunities/${op._id}`);
       if (res.data?.success) {
         setModalIntelligence(res.data.data || res.data);
       }
+      
+      if (op.organizationId) {
+        const appRes = await api.get(`/applications/status/${op._id}`);
+        if (appRes.data?.success && appRes.data.hasApplied) {
+          setApplicationStatus(appRes.data.status);
+          setApplicationDetails(appRes.data);
+        } else {
+          setApplicationDetails(null);
+        }
+      }
     } catch (err) {
       console.error('Failed to load opportunity detail intelligence:', err);
     } finally {
       setModalLoading(false);
+    }
+  };
+
+  const handleApply = async () => {
+    if (!activeOp?.organizationId) return;
+    
+    setApplying(true);
+    try {
+      const res = await api.post(`/applications/${activeOp._id}`);
+      if (res.data?.success) {
+        setApplicationStatus('applied');
+        alert('Application submitted successfully!');
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to submit application');
+    } finally {
+      setApplying(false);
     }
   };
 
@@ -967,6 +998,102 @@ export const OpportunitiesPage = () => {
                 </div>
               </div>
 
+              {/* Application Status Timeline for Candidate */}
+              {applicationDetails && (
+                <div className="p-4 sm:p-5 rounded-2xl bg-indigo-50/50 border border-indigo-100 space-y-4">
+                  <div className="flex items-center justify-between border-b border-indigo-100 pb-3">
+                    <h4 className="text-sm font-bold text-indigo-900 flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-indigo-600" />
+                      Your Application Status
+                    </h4>
+                    <Badge variant={
+                      applicationDetails.status === 'shortlisted' ? 'success' :
+                      applicationDetails.status === 'rejected' ? 'danger' :
+                      'brand'
+                    } size="sm">
+                      {applicationDetails.status?.replace('_', ' ')}
+                    </Badge>
+                  </div>
+                  
+                  <div className="space-y-4 pt-2">
+                    {applicationDetails.statusHistory && applicationDetails.statusHistory.length > 0 ? (
+                      applicationDetails.statusHistory.map((hist, idx) => (
+                        <div key={idx} className="relative pl-6 pb-4 last:pb-0">
+                          <div className="absolute left-2 top-1.5 w-2 h-2 rounded-full bg-indigo-600 ring-4 ring-indigo-100"></div>
+                          {idx !== applicationDetails.statusHistory.length - 1 && (
+                            <div className="absolute left-[11px] top-4 bottom-0 w-px bg-indigo-200"></div>
+                          )}
+                          <div>
+                            <p className="text-sm font-bold text-indigo-900 capitalize">
+                              {hist.status.replace('_', ' ')}
+                            </p>
+                            <p className="text-xs text-indigo-700/70">
+                              {new Date(hist.changedAt).toLocaleString()}
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="relative pl-6">
+                        <div className="absolute left-2 top-1.5 w-2 h-2 rounded-full bg-indigo-600 ring-4 ring-indigo-100"></div>
+                        <div>
+                          <p className="text-sm font-bold text-indigo-900 capitalize">
+                            Applied
+                          </p>
+                          <p className="text-xs text-indigo-700/70">
+                            {applicationDetails.appliedAt ? new Date(applicationDetails.appliedAt).toLocaleString() : 'Recently'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {applicationDetails?.hiring && applicationDetails.hiring.status !== 'pending_offer' && (
+                <div className="p-4 sm:p-5 rounded-2xl bg-emerald-50/50 border border-emerald-100 space-y-4">
+                  <div className="flex items-center justify-between border-b border-emerald-100 pb-3">
+                    <h4 className="text-sm font-bold text-emerald-900">Offer Status: {applicationDetails.hiring.status.replace('_', ' ').toUpperCase()}</h4>
+                  </div>
+                  <div className="text-sm text-emerald-800 space-y-1 pt-2">
+                    <p><strong>Role:</strong> {applicationDetails.hiring.offerDetails.role}</p>
+                    <p><strong>Compensation:</strong> {applicationDetails.hiring.offerDetails.compensation}</p>
+                    <p><strong>Joining Date:</strong> {new Date(applicationDetails.hiring.offerDetails.joiningDate).toLocaleDateString()}</p>
+                    <p><strong>Type:</strong> {applicationDetails.hiring.offerDetails.employmentType}</p>
+                    {applicationDetails.hiring.offerDetails.additionalNotes && (
+                      <p><strong>Notes:</strong> {applicationDetails.hiring.offerDetails.additionalNotes}</p>
+                    )}
+                  </div>
+                  {applicationDetails.hiring.status === 'offer_sent' && (
+                    <div className="pt-3 flex gap-3">
+                      <button onClick={async () => {
+                        if (confirm('Accept this offer?')) {
+                          try {
+                            await api.patch(`/candidate/hiring/${applicationDetails.hiring._id}/respond`, { action: 'accept' });
+                            alert('Offer Accepted!');
+                            openOpportunityModal(activeOp); // Refresh
+                          } catch (e) {
+                            alert('Failed to accept offer');
+                          }
+                        }
+                      }} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm">Accept Offer</button>
+                      
+                      <button onClick={async () => {
+                        if (confirm('Decline this offer?')) {
+                          try {
+                            await api.patch(`/candidate/hiring/${applicationDetails.hiring._id}/respond`, { action: 'decline' });
+                            alert('Offer Declined');
+                            openOpportunityModal(activeOp); // Refresh
+                          } catch (e) {
+                            alert('Failed to decline offer');
+                          }
+                        }
+                      }} className="px-4 py-2 bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 font-bold rounded-xl text-sm">Decline Offer</button>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Modal Footer CTA */}
               <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
                 <Button
@@ -975,23 +1102,36 @@ export const OpportunitiesPage = () => {
                   onClick={() => {
                     setSelectedOpportunity(null);
                     setModalIntelligence(null);
+                    setApplicationStatus(null);
                   }}
                   className="w-full sm:w-auto text-xs text-slate-600"
                 >
                   Close
                 </Button>
 
-                <a
-                  href={activeOp.applicationUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 transition-all shadow-xs"
-                >
-                  {activeOp.isGovernment
-                    ? 'Visit Official Government Portal'
-                    : 'View & Apply on Official Source'}
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </a>
+                {activeOp.organizationId ? (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    disabled={applying || !!applicationStatus}
+                    onClick={handleApply}
+                    className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold shadow-xs"
+                  >
+                    {applying ? 'Applying...' : applicationStatus ? `Status: ${applicationStatus.toUpperCase()}` : 'Apply Now'}
+                  </Button>
+                ) : (
+                  <a
+                    href={activeOp.applicationUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 transition-all shadow-xs"
+                  >
+                    {activeOp.isGovernment
+                      ? 'Visit Official Government Portal'
+                      : 'View & Apply on Official Source'}
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                )}
               </div>
             </div>
           </div>

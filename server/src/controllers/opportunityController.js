@@ -15,7 +15,13 @@ export const getOpportunities = async (req, res) => {
   try {
     const { type, category, location } = req.query;
 
-    const query = {};
+    const query = {
+      $or: [
+        { status: 'published' },
+        { status: { $exists: false } }
+      ]
+    };
+    
     if (type && type !== 'All') {
       query.type = type;
     }
@@ -79,7 +85,12 @@ export const getOpportunities = async (req, res) => {
 export const getRecommendedOpportunities = async (req, res) => {
   try {
     const profile = await Profile.findOne({ user: req.user._id });
-    const opportunities = await Opportunity.find({});
+    const opportunities = await Opportunity.find({
+      $or: [
+        { status: 'published' },
+        { status: { $exists: false } }
+      ]
+    });
 
     const matched = opportunities.map((opp) => {
       const matchData = calculateOpportunityMatch(opp, profile);
@@ -134,11 +145,18 @@ export const getOpportunityById = async (req, res) => {
       });
     }
 
-    const opportunity = await Opportunity.findById(req.params.id);
+    const opportunity = await Opportunity.findOne({
+      _id: req.params.id,
+      $or: [
+        { status: 'published' },
+        { status: { $exists: false } }
+      ]
+    });
+    
     if (!opportunity) {
       return res.status(404).json({
         success: false,
-        message: 'Opportunity not found',
+        message: 'Opportunity not found or not available',
       });
     }
 
