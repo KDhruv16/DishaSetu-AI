@@ -1,7 +1,8 @@
 import React from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { Sparkles, Bell, ShieldCheck } from 'lucide-react';
+import { Sparkles, ShieldCheck } from 'lucide-react';
 import { Badge } from './Badge';
+import { NotificationBell } from '../notifications/NotificationBell';
 
 export const TopHeader = () => {
   const { user, profile } = useAuth();
@@ -50,6 +51,9 @@ export const TopHeader = () => {
             <ShieldCheck className="w-3.5 h-3.5" />
             <span>{user?.isOnboarded ? 'Profile Completed' : 'Profile Pending'}</span>
           </Badge>
+
+          {/* Candidate Notification Bell */}
+          <NotificationBell />
         </div>
       </div>
     </header>

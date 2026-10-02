@@ -274,8 +274,8 @@ export const AdminUsersPage = () => {
 
       {/* Candidate Profile Inspector Modal */}
       {selectedUser && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200/80 rounded-2xl max-w-2xl w-full p-6 shadow-xl space-y-6 max-h-[90vh] overflow-y-auto text-xs">
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-start justify-center pt-[24px] pb-[24px] px-[20px]">
+          <div className="bg-white border border-slate-200/80 rounded-2xl max-w-2xl w-full p-6 shadow-xl space-y-6 text-xs max-h-[calc(100vh-48px)] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-brand-100 text-brand-700 flex items-center justify-center text-sm font-bold">

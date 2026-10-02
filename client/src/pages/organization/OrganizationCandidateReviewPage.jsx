@@ -86,7 +86,7 @@ export const OrganizationCandidateReviewPage = () => {
   };
 
   const handleStatusChange = async (newStatus) => {
-    if ((newStatus === 'shortlisted' || newStatus === 'rejected' || newStatus === 'selected') && confirmAction !== newStatus) {
+    if ((newStatus === 'shortlisted' || newStatus === 'interview' || newStatus === 'rejected' || newStatus === 'selected') && confirmAction !== newStatus) {
       setConfirmAction(newStatus);
       return;
     }
@@ -207,6 +207,12 @@ export const OrganizationCandidateReviewPage = () => {
         return <span className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg"><Loader className="w-4 h-4" /> Under Review</span>;
       case 'shortlisted':
         return <span className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg"><CheckCircle className="w-4 h-4" /> Shortlisted</span>;
+      case 'interview':
+        return <span className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg"><Clock className="w-4 h-4" /> Interview</span>;
+      case 'selected':
+        return <span className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold text-purple-700 bg-purple-50 border border-purple-200 rounded-lg"><CheckCircle className="w-4 h-4" /> Selected</span>;
+      case 'hired':
+        return <span className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold text-green-700 bg-green-50 border border-green-200 rounded-lg"><CheckCircle className="w-4 h-4" /> Hired</span>;
       case 'rejected':
         return <span className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold text-red-700 bg-red-50 border border-red-200 rounded-lg"><XCircle className="w-4 h-4" /> Rejected</span>;
       default:
@@ -242,12 +248,15 @@ export const OrganizationCandidateReviewPage = () => {
             <div className="bg-gray-50 border border-gray-200 p-4 rounded-xl shadow-sm text-sm">
               <p className="font-bold text-gray-900 mb-1">
                 {confirmAction === 'shortlisted' ? 'Shortlist this candidate?' 
+                 : confirmAction === 'interview' ? 'Move candidate to Interview stage?'
                  : confirmAction === 'selected' ? 'Select this candidate?' 
                  : 'Reject this application?'}
               </p>
               <p className="text-gray-500 mb-3">
                 {confirmAction === 'shortlisted' 
                   ? 'The candidate will be moved to the Shortlisted stage.' 
+                  : confirmAction === 'interview'
+                  ? 'The candidate will be moved to the Interview stage.'
                   : confirmAction === 'selected'
                   ? 'This will move the application to the Selected stage.'
                   : 'The candidate will be moved to the Rejected stage.'}
@@ -264,10 +273,10 @@ export const OrganizationCandidateReviewPage = () => {
                   onClick={() => handleStatusChange(confirmAction)}
                   disabled={updating}
                   className={`px-3 py-1.5 text-white rounded-lg font-bold transition-colors ${
-                    confirmAction === 'shortlisted' || confirmAction === 'selected' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'
+                    confirmAction === 'shortlisted' || confirmAction === 'interview' || confirmAction === 'selected' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'
                   }`}
                 >
-                  {updating ? 'Updating...' : confirmAction === 'shortlisted' ? 'Shortlist' : confirmAction === 'selected' ? 'Select Candidate' : 'Reject'}
+                  {updating ? 'Updating...' : confirmAction === 'shortlisted' ? 'Shortlist' : confirmAction === 'interview' ? 'Move to Interview' : confirmAction === 'selected' ? 'Select Candidate' : 'Reject'}
                 </button>
               </div>
             </div>
@@ -289,10 +298,15 @@ export const OrganizationCandidateReviewPage = () => {
                 )}
                 {application.status === 'shortlisted' && (
                   <>
+                    <button onClick={() => handleStatusChange('interview')} disabled={updating} className="px-4 py-2 bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 rounded-xl text-sm font-bold transition-colors">Move to Interview</button>
                     <button onClick={() => setShowInterviewModal(true)} disabled={updating} className="px-4 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 rounded-xl text-sm font-bold transition-colors">Schedule Interview</button>
-                    {application.interview?.status === 'completed' && (
-                      <button onClick={() => handleStatusChange('selected')} disabled={updating} className="px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 rounded-xl text-sm font-bold transition-colors">Select Candidate</button>
-                    )}
+                    <button onClick={() => handleStatusChange('rejected')} disabled={updating} className="px-4 py-2 bg-white text-gray-600 border border-gray-300 hover:bg-red-50 hover:text-red-600 hover:border-red-200 rounded-xl text-sm font-bold transition-colors">Reject</button>
+                  </>
+                )}
+                {application.status === 'interview' && (
+                  <>
+                    <button onClick={() => setShowInterviewModal(true)} disabled={updating} className="px-4 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 rounded-xl text-sm font-bold transition-colors">{application.interview ? 'Reschedule Interview' : 'Schedule Interview'}</button>
+                    <button onClick={() => handleStatusChange('selected')} disabled={updating} className="px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 rounded-xl text-sm font-bold transition-colors">Select Candidate</button>
                     <button onClick={() => handleStatusChange('rejected')} disabled={updating} className="px-4 py-2 bg-white text-gray-600 border border-gray-300 hover:bg-red-50 hover:text-red-600 hover:border-red-200 rounded-xl text-sm font-bold transition-colors">Reject</button>
                   </>
                 )}
@@ -710,8 +724,8 @@ export const OrganizationCandidateReviewPage = () => {
       </div>
 
       {showInterviewModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 overflow-y-auto max-h-[90vh]">
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-[24px] pb-[24px] px-[20px] bg-slate-900/50 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 max-h-[calc(100vh-48px)] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold">Schedule Interview</h2>
               <button onClick={() => setShowInterviewModal(false)} className="text-gray-500 hover:text-gray-800"><XCircle className="w-5 h-5"/></button>
@@ -784,8 +798,8 @@ export const OrganizationCandidateReviewPage = () => {
       )}
 
       {showOfferModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 overflow-y-auto max-h-[90vh]">
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-[24px] pb-[24px] px-[20px] bg-slate-900/50 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 max-h-[calc(100vh-48px)] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold">Create Offer Details</h2>
               <button onClick={() => setShowOfferModal(false)} className="text-gray-500 hover:text-gray-800"><XCircle className="w-5 h-5"/></button>
@@ -831,8 +845,8 @@ export const OrganizationCandidateReviewPage = () => {
       )}
 
       {showResumeModal && candidate?.resume && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl max-w-3xl w-full p-6 shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-[24px] pb-[24px] px-[20px] bg-slate-900/50 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl max-w-3xl w-full p-6 shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[calc(100vh-48px)] overflow-y-auto">
             <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-100 shrink-0">
               <div>
                 <h2 className="text-xl font-bold flex items-center gap-2">

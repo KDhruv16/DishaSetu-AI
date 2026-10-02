@@ -139,14 +139,16 @@ export const getApplicationDetails = async (req, res) => {
   }
 };
 
+import { notifyApplicationStatusChange } from '../services/notificationService.js';
+
 // @desc    Update application status
 // @route   PATCH /api/organization/applications/:id/status
 // @access  Private (Organization only)
 export const updateApplicationStatus = async (req, res) => {
   try {
-    const { status } = req.body;
+    const { status, note } = req.body;
 
-    const validStatuses = ['applied', 'under_review', 'shortlisted', 'selected', 'hired', 'rejected'];
+    const validStatuses = ['applied', 'under_review', 'shortlisted', 'interview', 'selected', 'hired', 'rejected'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
@@ -157,7 +159,7 @@ export const updateApplicationStatus = async (req, res) => {
     const application = await Application.findOne({
       _id: req.params.id,
       organization: req.user._id, // Strict ownership check
-    });
+    }).populate('opportunity');
 
     if (!application) {
       return res.status(404).json({
@@ -172,7 +174,8 @@ export const updateApplicationStatus = async (req, res) => {
     const validTransitions = {
       'applied': ['under_review', 'rejected'],
       'under_review': ['shortlisted', 'rejected'],
-      'shortlisted': ['selected', 'rejected'],
+      'shortlisted': ['interview', 'selected', 'rejected'],
+      'interview': ['selected', 'rejected'],
       'selected': ['hired', 'rejected'],
       'rejected': [], 
       'hired': []
@@ -185,17 +188,17 @@ export const updateApplicationStatus = async (req, res) => {
       });
     }
 
-    // Step 3 — Interview completion requirement
+    // If an interview was scheduled and is currently pending, require completion before selecting
     if (status === 'selected') {
-      const completedInterview = await OrganizationInterview.findOne({
+      const pendingInterview = await OrganizationInterview.findOne({
         application: application._id,
-        status: 'completed'
+        status: { $in: ['scheduled', 'confirmed'] }
       });
       
-      if (!completedInterview) {
+      if (pendingInterview) {
         return res.status(400).json({
           success: false,
-          message: 'Cannot select candidate until an interview is completed.'
+          message: 'Cannot select candidate while a scheduled interview is still pending.'
         });
       }
     }
@@ -205,10 +208,23 @@ export const updateApplicationStatus = async (req, res) => {
     application.statusHistory.push({
       status,
       changedAt: new Date(),
-      changedBy: req.user._id
+      changedBy: req.user._id,
+      note: note && typeof note === 'string' ? note.trim() : undefined,
     });
 
     await application.save();
+
+    // Trigger Candidate Notification automatically from backend
+    try {
+      await notifyApplicationStatusChange({
+        application,
+        status,
+        changedBy: req.user._id,
+        note: note && typeof note === 'string' ? note.trim() : undefined,
+      });
+    } catch (notifErr) {
+      console.error('Error triggering status change notification:', notifErr);
+    }
 
     return res.status(200).json({
       success: true,

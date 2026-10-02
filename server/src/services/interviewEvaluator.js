@@ -28,32 +28,32 @@ export const evaluateInterviewAnswer = async (
     throw new Error('Gemini API key is not configured.');
   }
 
-  const prompt = `You are an expert interview answer evaluator.
-Evaluate the candidate's answer ONLY against the exact question provided.
-The candidate should receive credit only for knowledge actually demonstrated in their answer.
+  const prompt = `You are a strict, expert technical interview answer evaluator.
+Your job is to evaluate the candidate's answer ONLY against the EXACT question provided.
+The candidate should receive credit only for knowledge actually demonstrated in their answer that directly addresses the question.
 
 QUESTION: "${questionText}"
 CANDIDATE ANSWER: "${cleanAnswer}"
 ${targetSkill ? `TARGET SKILL: "${targetSkill}"\nNote: A correct answer for a different skill must NOT be considered valid for this target skill.` : ''}
 
-IMPLEMENT QUESTION-SPECIFIC REQUIREMENT MATCHING:
-1. Extract the key concepts/requirements that must be addressed based on the exact QUESTION asked.
-2. Compare the CANDIDATE ANSWER against those requirements.
-3. Determine whether the answer actually addresses the asked question. Answer this question before assigning a positive verdict: "Did the candidate actually answer the question that was asked?"
-4. Detect topic drift / unrelated technically-correct answers.
-5. Penalize answers that explain a related technology but fail to answer the actual question.
-6. Do not give a GOOD or EXCELLENT verdict merely because the answer is technically correct in isolation. If it doesn't answer the specific question, it is INSUFFICIENT or POOR.
+IMPLEMENT STRICT QUESTION-SPECIFIC REQUIREMENT MATCHING:
+1. Extract the core technical concepts/mechanisms that MUST be addressed based on the exact QUESTION asked (e.g., if asked "how it achieves X", the answer MUST explain the "how" mechanism, not just define "X").
+2. Compare the CANDIDATE ANSWER against those exact requirements.
+3. Determine whether the answer actually addresses the core technical depth of the question. Answer this question before assigning a positive verdict: "Did the candidate actually explain the mechanisms or answer the specific question that was asked?"
+4. Detect topic drift / unrelated technically-correct answers. If the candidate just provides a basic definition of the technology instead of answering the specific complex question, the answer is INSUFFICIENT.
+5. PENALIZE SEVERELY answers that explain a related technology but fail to answer the actual question. If the question asks for advanced concepts (like Event Loop, Call Stack, Non-blocking I/O) and the answer only provides a basic definition (like "Node.js is a runtime"), the completeness and relevance scores MUST BE VERY LOW (e.g., under 20%), and the overall score MUST be below 30.
+6. Do not give a GOOD or EXCELLENT verdict merely because the answer is technically correct in isolation. If it doesn't answer the specific question, the verdict MUST be INSUFFICIENT or INCORRECT, and the score MUST be below 40.
 
 Do not give credit simply because:
 - the answer contains keywords from the question
 - the answer contains technical words
 - the answer is long
 - the answer sounds professional
-- the answer contains information that is true but unrelated to the question
+- the answer contains information that is true but unrelated to the core requirements of the question
 
-A short but correct answer can receive a high score.
-A long but irrelevant answer must receive a very low score.
-If the candidate provides a poem, story, motivational text, unrelated technical explanation, random text, gibberish, question repetition, or keyword stuffing instead of answering the question, evaluate it as incorrect/insufficient.
+A short but precisely correct answer can receive a high score.
+A long but irrelevant or shallow answer must receive a very low score.
+If the candidate provides a poem, story, motivational text, unrelated technical explanation, random text, gibberish, question repetition, or keyword stuffing, evaluate it as incorrect/insufficient with a score near 0.
 Do not infer missing knowledge.
 Do not use an expected/model answer as evidence that the candidate knows something.
 Only the candidate's actual answer is evidence.

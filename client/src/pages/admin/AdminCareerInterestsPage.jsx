@@ -247,8 +247,8 @@ export const AdminCareerInterestsPage = () => {
 
       {/* Create / Edit Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200/80 rounded-2xl max-w-lg w-full p-6 shadow-xl space-y-5">
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-start justify-center pt-[24px] pb-[24px] px-[20px]">
+          <div className="bg-white border border-slate-200/80 rounded-2xl max-w-lg w-full p-6 shadow-xl space-y-5 max-h-[calc(100vh-48px)] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <h3 className="text-base font-bold text-slate-900 font-display">
                 {editingItem ? 'Edit Career Interest' : 'Add Career Interest'}

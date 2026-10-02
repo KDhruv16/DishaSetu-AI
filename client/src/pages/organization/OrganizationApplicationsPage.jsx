@@ -56,6 +56,8 @@ export const OrganizationApplicationsPage = () => {
         return <span className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-md"><Loader className="w-3.5 h-3.5" /> Under Review</span>;
       case 'shortlisted':
         return <span className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md"><CheckCircle className="w-3.5 h-3.5" /> Shortlisted</span>;
+      case 'interview':
+        return <span className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-md"><Clock className="w-3.5 h-3.5" /> Interview</span>;
       case 'selected':
         return <span className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold text-purple-700 bg-purple-50 border border-purple-200 rounded-md"><CheckCircle className="w-3.5 h-3.5" /> Selected</span>;
       case 'hired':
@@ -118,7 +120,7 @@ export const OrganizationApplicationsPage = () => {
       {/* Filters and Search */}
       <div className="flex flex-col md:flex-row gap-4 mb-6">
         <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0 flex-1">
-          {['All', 'Applied', 'Under Review', 'Shortlisted', 'Selected', 'Hired', 'Rejected'].map((f) => (
+          {['All', 'Applied', 'Under Review', 'Shortlisted', 'Interview', 'Selected', 'Hired', 'Rejected'].map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}

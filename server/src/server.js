@@ -21,6 +21,7 @@ import candidateHiringRoutes from './routes/candidateHiringRoutes.js';
 import careerInterestRoutes from './routes/careerInterestRoutes.js';
 import industryCategoryRoutes from './routes/industryCategoryRoutes.js';
 import skillCategoryRoutes from './routes/skillCategoryRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
 import { seedOpportunities } from './seed/opportunities.js';
 import { seedCourses } from './seed/courses.js';
 import { seedDemoProfile } from './seed/demoProfile.js';
@@ -84,6 +85,7 @@ app.use('/api/candidate/hiring', candidateHiringRoutes);
 app.use('/api/master-data/career-interests', careerInterestRoutes);
 app.use('/api/master-data/industry-categories', industryCategoryRoutes);
 app.use('/api/master-data/skill-categories', skillCategoryRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 
 

@@ -2,6 +2,8 @@ import Application from '../models/Application.js';
 import Opportunity from '../models/Opportunity.js';
 import Hiring from '../models/Hiring.js';
 import ResumeAnalysis from '../models/ResumeAnalysis.js';
+import OrganizationInterview from '../models/OrganizationInterview.js';
+import { notifyApplicationStatusChange } from '../services/notificationService.js';
 
 // @desc    Apply to an opportunity
 // @route   POST /api/applications/:opportunityId
@@ -61,6 +63,21 @@ export const applyToOpportunity = async (req, res) => {
       ]
     });
 
+    // Generate Candidate Notification for application submission
+    try {
+      await notifyApplicationStatusChange({
+        application: {
+          _id: application._id,
+          candidate: req.user._id,
+          opportunity,
+        },
+        status: 'applied',
+        changedBy: req.user._id,
+      });
+    } catch (notifErr) {
+      console.error('Failed to dispatch application_submitted notification:', notifErr);
+    }
+
     return res.status(201).json({
       success: true,
       data: application,
@@ -113,6 +130,84 @@ export const getApplicationStatus = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Server Error',
+    });
+  }
+};
+
+// @desc    Get all applications for the authenticated candidate
+// @route   GET /api/applications/my
+// @access  Private (Candidate only)
+export const getMyApplications = async (req, res) => {
+  try {
+    const applications = await Application.find({ candidate: req.user._id })
+      .populate('opportunity')
+      .populate('organization', 'name email company')
+      .populate('resume', 'fileName targetRole overallScore')
+      .sort({ createdAt: -1 });
+
+    // Compute application summary statistics from real backend records
+    const summary = {
+      total: applications.length,
+      under_review: applications.filter(a => a.status === 'under_review').length,
+      shortlisted: applications.filter(a => a.status === 'shortlisted').length,
+      interview: applications.filter(a => a.status === 'interview').length,
+      selected: applications.filter(a => a.status === 'selected' || a.status === 'hired').length,
+      rejected: applications.filter(a => a.status === 'rejected').length,
+    };
+
+    return res.status(200).json({
+      success: true,
+      count: applications.length,
+      summary,
+      data: applications,
+    });
+  } catch (error) {
+    console.error('getMyApplications error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error fetching candidate applications',
+    });
+  }
+};
+
+// @desc    Get detailed candidate application info with interview & offer
+// @route   GET /api/applications/detail/:id
+// @access  Private (Candidate only)
+export const getCandidateApplicationDetails = async (req, res) => {
+  try {
+    const application = await Application.findOne({
+      _id: req.params.id,
+      candidate: req.user._id, // Strict candidate isolation
+    })
+      .populate('opportunity')
+      .populate('organization', 'name email')
+      .populate('resume', 'fileName targetRole overallScore skillsFound');
+
+    if (!application) {
+      return res.status(404).json({
+        success: false,
+        message: 'Application not found or unauthorized',
+      });
+    }
+
+    const [interview, hiring] = await Promise.all([
+      OrganizationInterview.findOne({ application: application._id }).sort({ createdAt: -1 }),
+      Hiring.findOne({ application: application._id }),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        application,
+        interview: interview || null,
+        hiring: hiring || null,
+      },
+    });
+  } catch (error) {
+    console.error('getCandidateApplicationDetails error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error fetching application details',
     });
   }
 };

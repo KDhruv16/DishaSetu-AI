@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 import { TopHeader } from '../components/common/TopHeader';
 import { Card } from '../components/common/Card';
 import { Badge } from '../components/common/Badge';
 import { Button } from '../components/common/Button';
+import { ApplicationTimeline } from '../components/applications/ApplicationTimeline';
+import { ApplicationDetailsModal } from '../components/applications/ApplicationDetailsModal';
+import { Modal } from '../components/common/Modal';
 import {
   Briefcase,
   MapPin,
@@ -36,7 +39,11 @@ import {
 
 export const OpportunitiesPage = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { profile, user } = useAuth();
+
+  const initialMainTab = searchParams.get('tab') === 'applied' ? 'applied' : 'explore';
+  const [mainViewTab, setMainViewTab] = useState(initialMainTab);
 
   const [opportunities, setOpportunities] = useState([]);
   const [recommended, setRecommended] = useState([]);
@@ -53,11 +60,53 @@ export const OpportunitiesPage = () => {
   const [applicationDetails, setApplicationDetails] = useState(null);
   const [applying, setApplying] = useState(false);
 
+  // My Applications State
+  const [myApplications, setMyApplications] = useState([]);
+  const [appSummary, setAppSummary] = useState({
+    total: 0,
+    under_review: 0,
+    shortlisted: 0,
+    interview: 0,
+    selected: 0,
+    rejected: 0,
+  });
+  const [appliedLoading, setAppliedLoading] = useState(false);
+  const [appliedStatusFilter, setAppliedStatusFilter] = useState('All');
+  const [appliedSearchQuery, setAppliedSearchQuery] = useState('');
+  const [selectedAppDetail, setSelectedAppDetail] = useState(null);
+  const [appDetailModalOpen, setAppDetailModalOpen] = useState(false);
+
   useEffect(() => {
     fetchOpportunities();
     fetchRecommended();
     fetchCandidateProgress();
+    fetchMyApplications();
   }, [profile]);
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'applied') {
+      setMainViewTab('applied');
+      fetchMyApplications();
+    }
+  }, [searchParams]);
+
+  const fetchMyApplications = async () => {
+    try {
+      setAppliedLoading(true);
+      const res = await api.get('/applications/my');
+      if (res.data?.success) {
+        setMyApplications(res.data.data || []);
+        if (res.data.summary) {
+          setAppSummary(res.data.summary);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load candidate applications:', err);
+    } finally {
+      setAppliedLoading(false);
+    }
+  };
 
   const fetchCandidateProgress = async () => {
     try {
@@ -134,6 +183,7 @@ export const OpportunitiesPage = () => {
       const res = await api.post(`/applications/${activeOp._id}`);
       if (res.data?.success) {
         setApplicationStatus('applied');
+        fetchMyApplications();
         alert('Application submitted successfully!');
       }
     } catch (err) {
@@ -142,6 +192,89 @@ export const OpportunitiesPage = () => {
       setApplying(false);
     }
   };
+
+  const handleOpenApplicationDetail = async (appId) => {
+    try {
+      const res = await api.get(`/applications/detail/${appId}`);
+      if (res.data?.success) {
+        setSelectedAppDetail(res.data.data);
+        setAppDetailModalOpen(true);
+      }
+    } catch (err) {
+      console.error('Failed to load application details:', err);
+    }
+  };
+
+  const getAppStatusBadge = (status) => {
+    switch (status) {
+      case 'applied':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-slate-700 bg-slate-100 rounded-lg">
+            <Clock className="w-3.5 h-3.5" /> Applied
+          </span>
+        );
+      case 'under_review':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg">
+            <Clock className="w-3.5 h-3.5 animate-spin" /> Under Review
+          </span>
+        );
+      case 'shortlisted':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg">
+            <Award className="w-3.5 h-3.5" /> Shortlisted
+          </span>
+        );
+      case 'interview':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-purple-700 bg-purple-50 border border-purple-200 rounded-lg">
+            <CheckCircle2 className="w-3.5 h-3.5" /> Interview
+          </span>
+        );
+      case 'selected':
+      case 'hired':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-green-700 bg-green-50 border border-green-200 rounded-lg">
+            <Sparkles className="w-3.5 h-3.5" /> Selected
+          </span>
+        );
+      case 'rejected':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg">
+            <X className="w-3.5 h-3.5" /> Not Selected
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-slate-600 bg-slate-100 rounded-lg capitalize">
+            {status?.replace('_', ' ')}
+          </span>
+        );
+    }
+  };
+
+  const filteredAppliedList = myApplications.filter((app) => {
+    if (appliedStatusFilter !== 'All') {
+      const target = appliedStatusFilter.toLowerCase().replace(' ', '_');
+      if (app.status !== target) {
+        if (target === 'selected' && app.status === 'hired') {
+          // allow hired in selected
+        } else {
+          return false;
+        }
+      }
+    }
+
+    if (appliedSearchQuery.trim()) {
+      const q = appliedSearchQuery.toLowerCase();
+      const opp = app.opportunity || {};
+      const title = (opp.title || '').toLowerCase();
+      const org = (opp.organization || app.organization?.name || '').toLowerCase();
+      if (!title.includes(q) && !org.includes(q)) return false;
+    }
+
+    return true;
+  });
 
   // Filter logic
   const filteredList = opportunities.filter((op) => {
@@ -225,6 +358,216 @@ export const OpportunitiesPage = () => {
           </div>
         </div>
 
+        {/* =========================================================
+            PRIMARY VIEW TABS: RECOMMENDED / EXPLORE vs MY APPLICATIONS
+            ========================================================= */}
+        <div className="flex items-center gap-2 border-b border-slate-200">
+          <button
+            onClick={() => {
+              setMainViewTab('explore');
+              setSearchParams({});
+            }}
+            className={`flex items-center gap-2 px-5 py-3 text-sm font-bold border-b-2 transition-all -mb-px ${
+              mainViewTab === 'explore'
+                ? 'border-brand-600 text-brand-600'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>Explore Opportunities</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setMainViewTab('applied');
+              setSearchParams({ tab: 'applied' });
+              fetchMyApplications();
+            }}
+            className={`flex items-center gap-2 px-5 py-3 text-sm font-bold border-b-2 transition-all -mb-px ${
+              mainViewTab === 'applied'
+                ? 'border-brand-600 text-brand-600'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Briefcase className="w-4 h-4" />
+            <span>My Applications / Applied</span>
+            <span
+              className={`px-2 py-0.5 rounded-full text-xs font-extrabold ${
+                mainViewTab === 'applied'
+                  ? 'bg-brand-100 text-brand-700'
+                  : 'bg-slate-100 text-slate-600'
+              }`}
+            >
+              {myApplications.length}
+            </span>
+          </button>
+        </div>
+
+        {mainViewTab === 'applied' ? (
+          <div className="space-y-8 animate-fadeIn">
+            {/* Compact Application Summary (Requirement 8) */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Applied</p>
+                <p className="text-2xl font-bold font-display text-slate-900 mt-1">{appSummary.total}</p>
+              </div>
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
+                <p className="text-xs font-semibold text-blue-600 uppercase tracking-wider">Under Review</p>
+                <p className="text-2xl font-bold font-display text-blue-900 mt-1">{appSummary.under_review}</p>
+              </div>
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
+                <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">Shortlisted</p>
+                <p className="text-2xl font-bold font-display text-emerald-900 mt-1">{appSummary.shortlisted}</p>
+              </div>
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
+                <p className="text-xs font-semibold text-purple-600 uppercase tracking-wider">Interview</p>
+                <p className="text-2xl font-bold font-display text-purple-900 mt-1">{appSummary.interview}</p>
+              </div>
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
+                <p className="text-xs font-semibold text-green-600 uppercase tracking-wider">Selected</p>
+                <p className="text-2xl font-bold font-display text-green-900 mt-1">{appSummary.selected}</p>
+              </div>
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
+                <p className="text-xs font-semibold text-rose-600 uppercase tracking-wider">Rejected</p>
+                <p className="text-2xl font-bold font-display text-rose-900 mt-1">{appSummary.rejected}</p>
+              </div>
+            </div>
+
+            {/* Filter & Search Bar */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 shadow-2xs overflow-x-auto no-scrollbar">
+                {['All', 'Under Review', 'Shortlisted', 'Interview', 'Selected', 'Rejected'].map((st) => (
+                  <button
+                    key={st}
+                    onClick={() => setAppliedStatusFilter(st)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                      appliedStatusFilter === st
+                        ? 'bg-brand-600 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    }`}
+                  >
+                    {st}
+                  </button>
+                ))}
+              </div>
+
+              <div className="relative w-full sm:w-72">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={appliedSearchQuery}
+                  onChange={(e) => setAppliedSearchQuery(e.target.value)}
+                  placeholder="Search applied roles or companies..."
+                  className="w-full pl-9 pr-4 py-2 text-xs rounded-xl bg-white border border-slate-200 focus:outline-hidden focus:border-brand-500 text-slate-800 placeholder-slate-400 shadow-2xs transition-all"
+                />
+              </div>
+            </div>
+
+            {/* Applications List */}
+            {appliedLoading ? (
+              <div className="flex items-center justify-center py-20">
+                <Clock className="w-8 h-8 text-brand-600 animate-spin" />
+              </div>
+            ) : filteredAppliedList.length === 0 ? (
+              <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center space-y-4 shadow-2xs">
+                <div className="w-16 h-16 rounded-2xl bg-brand-50 text-brand-600 flex items-center justify-center mx-auto">
+                  <Briefcase className="w-8 h-8" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold font-display text-slate-900">
+                    {appliedSearchQuery || appliedStatusFilter !== 'All'
+                      ? 'No matching applications found'
+                      : 'No applications yet'}
+                  </h3>
+                  <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
+                    {appliedSearchQuery || appliedStatusFilter !== 'All'
+                      ? 'Try adjusting your search query or status filter.'
+                      : 'Explore verified career opportunities and submit your profile with ATS resume matching to start tracking.'}
+                  </p>
+                </div>
+                {!(appliedSearchQuery || appliedStatusFilter !== 'All') && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => {
+                      setMainViewTab('explore');
+                      setSearchParams({});
+                    }}
+                    className="text-xs font-semibold"
+                  >
+                    Explore Opportunities →
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredAppliedList.map((app) => {
+                  const opp = app.opportunity || {};
+                  const org = app.organization || {};
+                  return (
+                    <div
+                      key={app._id}
+                      className="bg-white rounded-2xl border border-slate-200/90 hover:border-brand-300 p-5 sm:p-6 shadow-2xs hover:shadow-md transition-all space-y-4"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-bold text-base sm:text-lg text-slate-900">
+                              {opp.title || 'Opportunity'}
+                            </span>
+                            <Badge variant="neutral" size="sm">
+                              {opp.type || 'Job'}
+                            </Badge>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
+                            <span className="flex items-center gap-1 font-semibold text-slate-800">
+                              <Building2 className="w-3.5 h-3.5 text-slate-400" />
+                              {opp.organization || org.name || 'Company'}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                              {opp.location || 'Location'} {opp.workMode && `(${opp.workMode})`}
+                            </span>
+                            <span className="text-slate-400">
+                              Applied on: {new Date(app.createdAt || app.appliedAt).toLocaleDateString(undefined, {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                              })}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          {getAppStatusBadge(app.status)}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleOpenApplicationDetail(app._id)}
+                            className="text-xs font-bold text-brand-600 border-brand-200 hover:bg-brand-50 shrink-0"
+                          >
+                            View Application
+                            <ChevronRight className="w-3.5 h-3.5 ml-1" />
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Mini Inline Timeline */}
+                      <div className="pt-3 border-t border-slate-100">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+                          Application Timeline
+                        </p>
+                        <ApplicationTimeline application={app} compact={true} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
         {/* =========================================================
             INCOMPLETE PROFILE BANNER (IF APPLICABLE)
             ========================================================= */}
@@ -688,16 +1031,22 @@ export const OpportunitiesPage = () => {
             </div>
           )}
         </div>
+        </>
+        )}
 
         {/* =========================================================
             MODAL: COMPREHENSIVE OPPORTUNITY & APPLICATION INTELLIGENCE
             ========================================================= */}
         {selectedOpportunity && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-fadeIn">
-            <div
-              className="bg-white rounded-3xl max-w-3xl w-full max-h-[92vh] overflow-y-auto shadow-2xl border border-slate-200 p-6 sm:p-7 space-y-6"
-              onClick={(e) => e.stopPropagation()}
-            >
+          <Modal
+            isOpen={!!selectedOpportunity}
+            onClose={() => {
+              setSelectedOpportunity(null);
+              setModalIntelligence(null);
+              setApplicationStatus(null);
+            }}
+            maxWidth="max-w-3xl"
+          >
               {/* Modal Top */}
               <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-4">
                 <div>
@@ -1014,47 +1363,20 @@ export const OpportunitiesPage = () => {
                       <Clock className="w-4 h-4 text-indigo-600" />
                       Your Application Status
                     </h4>
-                    <Badge variant={
-                      applicationDetails.status === 'shortlisted' ? 'success' :
-                      applicationDetails.status === 'rejected' ? 'danger' :
-                      'brand'
-                    } size="sm">
-                      {applicationDetails.status?.replace('_', ' ')}
-                    </Badge>
+                    <span className="text-xs text-indigo-700 font-semibold">
+                      Applied: {applicationDetails.appliedAt ? new Date(applicationDetails.appliedAt).toLocaleDateString() : 'Recently'}
+                    </span>
                   </div>
                   
-                  <div className="space-y-4 pt-2">
-                    {applicationDetails.statusHistory && applicationDetails.statusHistory.length > 0 ? (
-                      applicationDetails.statusHistory.map((hist, idx) => (
-                        <div key={idx} className="relative pl-6 pb-4 last:pb-0">
-                          <div className="absolute left-2 top-1.5 w-2 h-2 rounded-full bg-indigo-600 ring-4 ring-indigo-100"></div>
-                          {idx !== applicationDetails.statusHistory.length - 1 && (
-                            <div className="absolute left-[11px] top-4 bottom-0 w-px bg-indigo-200"></div>
-                          )}
-                          <div>
-                            <p className="text-sm font-bold text-indigo-900 capitalize">
-                              {hist.status.replace('_', ' ')}
-                            </p>
-                            <p className="text-xs text-indigo-700/70">
-                              {new Date(hist.changedAt).toLocaleString()}
-                            </p>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="relative pl-6">
-                        <div className="absolute left-2 top-1.5 w-2 h-2 rounded-full bg-indigo-600 ring-4 ring-indigo-100"></div>
-                        <div>
-                          <p className="text-sm font-bold text-indigo-900 capitalize">
-                            Applied
-                          </p>
-                          <p className="text-xs text-indigo-700/70">
-                            {applicationDetails.appliedAt ? new Date(applicationDetails.appliedAt).toLocaleString() : 'Recently'}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  <ApplicationTimeline
+                    application={{
+                      status: applicationDetails.status,
+                      statusHistory: applicationDetails.statusHistory,
+                      appliedAt: applicationDetails.appliedAt,
+                    }}
+                    interview={applicationDetails.interview}
+                    compact={false}
+                  />
                 </div>
               )}
 
@@ -1141,9 +1463,24 @@ export const OpportunitiesPage = () => {
                   </a>
                 )}
               </div>
-            </div>
-          </div>
+          </Modal>
         )}
+
+        {/* Application Details & Lifecycle Modal */}
+        <ApplicationDetailsModal
+          isOpen={appDetailModalOpen}
+          data={selectedAppDetail}
+          onClose={() => {
+            setAppDetailModalOpen(false);
+            setSelectedAppDetail(null);
+          }}
+          onRefresh={() => {
+            fetchMyApplications();
+            if (selectedAppDetail?.application?._id) {
+              handleOpenApplicationDetail(selectedAppDetail.application._id);
+            }
+          }}
+        />
       </main>
     </div>
   );

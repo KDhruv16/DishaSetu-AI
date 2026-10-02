@@ -23,14 +23,14 @@ const applicationSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['applied', 'under_review', 'shortlisted', 'selected', 'hired', 'rejected'],
+      enum: ['applied', 'under_review', 'shortlisted', 'interview', 'selected', 'hired', 'rejected'],
       default: 'applied',
     },
     statusHistory: [
       {
         status: {
           type: String,
-          enum: ['applied', 'under_review', 'shortlisted', 'selected', 'hired', 'rejected'],
+          enum: ['applied', 'under_review', 'shortlisted', 'interview', 'selected', 'hired', 'rejected'],
         },
         changedAt: {
           type: Date,
@@ -39,6 +39,10 @@ const applicationSchema = new mongoose.Schema(
         changedBy: {
           type: mongoose.Schema.Types.ObjectId,
           ref: 'User'
+        },
+        note: {
+          type: String,
+          trim: true
         }
       }
     ],

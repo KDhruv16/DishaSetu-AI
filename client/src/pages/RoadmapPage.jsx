@@ -7,6 +7,7 @@ import { TopHeader } from '../components/common/TopHeader';
 import { Card } from '../components/common/Card';
 import { Badge } from '../components/common/Badge';
 import { Button } from '../components/common/Button';
+import { Modal } from '../components/common/Modal';
 import {
   Milestone,
   CheckCircle2,
@@ -464,41 +465,40 @@ export const RoadmapPage = () => {
             CONFIRMATION MODAL: REGENERATE ROADMAP
             ========================================================= */}
         {showRegenModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-fadeIn">
-            <div
-              className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 p-6 space-y-4"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-                <AlertTriangle className="w-5 h-5" />
-              </div>
-              <h3 className="text-lg font-bold font-display text-slate-900">
-                Regenerate Career Roadmap?
-              </h3>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Your 4-week sprint will be freshly structured around your most recent career target and missing skill priorities. Existing progress will be reset.
-              </p>
-
-              <div className="pt-2 flex items-center justify-end gap-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowRegenModal(false)}
-                  className="text-xs"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={handleGenerateRoadmap}
-                  className="text-xs font-bold bg-brand-600 hover:bg-brand-700"
-                >
-                  Yes, Regenerate Roadmap
-                </Button>
-              </div>
+          <Modal
+            isOpen={showRegenModal}
+            onClose={() => setShowRegenModal(false)}
+            maxWidth="max-w-md"
+          >
+            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+              <AlertTriangle className="w-5 h-5" />
             </div>
-          </div>
+            <h3 className="text-lg font-bold font-display text-slate-900">
+              Regenerate Career Roadmap?
+            </h3>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Your 4-week sprint will be freshly structured around your most recent career target and missing skill priorities. Existing progress will be reset.
+            </p>
+
+            <div className="pt-2 flex items-center justify-end gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowRegenModal(false)}
+                className="text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleGenerateRoadmap}
+                className="text-xs font-bold bg-brand-600 hover:bg-brand-700"
+              >
+                Yes, Regenerate Roadmap
+              </Button>
+            </div>
+          </Modal>
         )}
       </main>
     </div>

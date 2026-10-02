@@ -1,5 +1,7 @@
 import OrganizationInterview from '../models/OrganizationInterview.js';
 import Application from '../models/Application.js';
+import Opportunity from '../models/Opportunity.js';
+import { createNotification } from '../services/notificationService.js';
 
 // @desc    Schedule an interview
 // @route   POST /api/organization/interviews
@@ -21,10 +23,10 @@ export const scheduleInterview = async (req, res) => {
       });
     }
 
-    if (application.status !== 'shortlisted') {
+    if (application.status !== 'shortlisted' && application.status !== 'interview') {
       return res.status(400).json({
         success: false,
-        message: 'Only shortlisted candidates can be scheduled for an interview.'
+        message: 'Only shortlisted or interviewing candidates can be scheduled for an interview.'
       });
     }
 
@@ -62,6 +64,48 @@ export const scheduleInterview = async (req, res) => {
       location: mode === 'offline' ? location : undefined,
       instructions
     });
+
+    // Update application status to interview if it was shortlisted
+    if (application.status === 'shortlisted') {
+      application.status = 'interview';
+      application.statusHistory = application.statusHistory || [];
+      application.statusHistory.push({
+        status: 'interview',
+        changedAt: new Date(),
+        changedBy: req.user._id,
+        note: `Interview scheduled: ${title} (${mode || 'Online'})`
+      });
+      await application.save();
+    }
+
+    // Candidate Notification: Interview Scheduled / Update
+    try {
+      const opp = await Opportunity.findById(application.opportunity);
+      const company = opp?.organization || req.user.name || 'Company';
+      const job = opp?.title || 'Opportunity';
+
+      await createNotification({
+        recipient: application.candidate,
+        sender: req.user._id,
+        type: 'interview_update',
+        title: 'Interview Scheduled',
+        message: `An interview update is available for your application to ${job} at ${company}.`,
+        application: application._id,
+        opportunity: application.opportunity,
+        companyName: company,
+        jobTitle: job,
+        metadata: {
+          interviewId: interview._id,
+          scheduledDate: interview.scheduledDate,
+          startTime: interview.startTime,
+          mode: interview.mode,
+          meetingLink: interview.meetingLink,
+          location: interview.location
+        }
+      });
+    } catch (notifErr) {
+      console.error('Error triggering interview notification:', notifErr);
+    }
 
     return res.status(201).json({
       success: true,
