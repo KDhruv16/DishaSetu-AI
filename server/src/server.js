@@ -22,6 +22,7 @@ import careerInterestRoutes from './routes/careerInterestRoutes.js';
 import industryCategoryRoutes from './routes/industryCategoryRoutes.js';
 import skillCategoryRoutes from './routes/skillCategoryRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
+import aiAvatarInterviewRoutes from './routes/aiAvatarInterviewRoutes.js';
 import { seedOpportunities } from './seed/opportunities.js';
 import { seedCourses } from './seed/courses.js';
 import { seedDemoProfile } from './seed/demoProfile.js';
@@ -86,8 +87,7 @@ app.use('/api/master-data/career-interests', careerInterestRoutes);
 app.use('/api/master-data/industry-categories', industryCategoryRoutes);
 app.use('/api/master-data/skill-categories', skillCategoryRoutes);
 app.use('/api/notifications', notificationRoutes);
-
-
+app.use('/api/ai-interview', aiAvatarInterviewRoutes);
 
 // Global Error Handler
 app.use((err, req, res, next) => {

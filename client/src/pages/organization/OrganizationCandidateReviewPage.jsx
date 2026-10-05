@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Loader, AlertCircle, ArrowLeft, Download, CheckCircle, XCircle, Clock, MapPin, Briefcase, GraduationCap, Award, Brain, FileText, Check } from 'lucide-react';
+import { Loader, AlertCircle, ArrowLeft, Download, CheckCircle, XCircle, Clock, MapPin, Briefcase, GraduationCap, Award, Brain, FileText, Check, Sparkles, Calendar } from 'lucide-react';
 import api from '../../utils/api';
 
 export const OrganizationCandidateReviewPage = () => {
@@ -143,12 +143,40 @@ export const OrganizationCandidateReviewPage = () => {
       if (res.data?.success) {
         alert('Interview scheduled successfully!');
         setShowInterviewModal(false);
-        // Maybe fetch applications again or redirect
+        setData(prev => ({
+          ...prev,
+          application: {
+            ...prev.application,
+            status: 'interview',
+            interview: res.data.data
+          }
+        }));
       }
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to schedule interview');
     } finally {
       setScheduling(false);
+    }
+  };
+
+  const handleSwitchInterviewType = async (newType) => {
+    if (!application?.interview?._id) return;
+    try {
+      const res = await api.patch(`/organization/interviews/${application.interview._id}/type`, { interviewType: newType });
+      if (res.data?.success) {
+        setData(prev => ({
+          ...prev,
+          application: {
+            ...prev.application,
+            interview: {
+              ...prev.application.interview,
+              interviewType: newType
+            }
+          }
+        }));
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to switch interview mode');
     }
   };
 
@@ -324,6 +352,107 @@ export const OrganizationCandidateReviewPage = () => {
           )}
         </div>
       </div>
+
+      {/* Scheduled Interview Card (Only appears AFTER interview is scheduled) */}
+      {application.interview && (
+        <div className="mb-8 p-6 rounded-3xl bg-white border border-gray-200/90 shadow-sm overflow-hidden relative">
+          <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-gray-100">
+            <div className="flex items-center gap-3.5">
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
+                application.interview.interviewType === 'ai' 
+                  ? 'bg-purple-100/70 text-purple-700 ring-4 ring-purple-50' 
+                  : 'bg-indigo-50 text-indigo-700 ring-4 ring-indigo-50'
+              }`}>
+                {application.interview.interviewType === 'ai' ? (
+                  <Sparkles className="w-6 h-6 text-purple-600" />
+                ) : (
+                  <Calendar className="w-6 h-6 text-indigo-600" />
+                )}
+              </div>
+              <div>
+                <div className="flex items-center gap-2.5">
+                  <h3 className="font-bold text-gray-900 text-base">
+                    Scheduled Interview: {application.interview.title || 'Technical Interview'}
+                  </h3>
+                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase ${
+                    application.interview.status === 'confirmed' 
+                      ? 'bg-emerald-100 text-emerald-800' 
+                      : 'bg-amber-100 text-amber-800'
+                  }`}>
+                    {application.interview.status}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-gray-400" />
+                  {new Date(application.interview.scheduledDate).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })} • {application.interview.startTime} - {application.interview.endTime} ({application.interview.mode})
+                </p>
+              </div>
+            </div>
+
+            {/* Mode Switcher: Human Interview vs AI Interview */}
+            <div className="flex items-center gap-1.5 bg-gray-100 p-1.5 rounded-2xl border border-gray-200">
+              <span className="text-xs font-bold text-gray-500 pl-2">Mode:</span>
+              <button
+                type="button"
+                onClick={() => handleSwitchInterviewType('human')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  (application.interview.interviewType || 'human') === 'human'
+                    ? 'bg-white text-gray-900 shadow-xs'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Human Interview
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSwitchInterviewType('ai')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  application.interview.interviewType === 'ai'
+                    ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-xs'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                AI Interview
+              </button>
+            </div>
+          </div>
+
+          {/* Details Bar based on Active Mode */}
+          <div className="pt-4 flex flex-wrap items-center justify-between gap-3 text-xs">
+            {application.interview.interviewType === 'ai' ? (
+              <div className="flex items-center gap-2.5 text-purple-900 bg-purple-50 px-4 py-2.5 rounded-2xl border border-purple-200/80 flex-1">
+                <Sparkles className="w-4 h-4 text-purple-600 shrink-0" />
+                <span>
+                  <strong>AI Interview Room Enabled:</strong> The candidate will be interviewed live by an interactive AI Avatar powered by Google Gemini. No external Google Meet link required.
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2.5 text-slate-700 bg-slate-50 px-4 py-2.5 rounded-2xl border border-slate-200 flex-1">
+                <Calendar className="w-4 h-4 text-slate-500 shrink-0" />
+                <span>
+                  <strong>Human Interview Mode:</strong> Standard recruiter meeting flow.
+                  {application.interview.meetingLink ? (
+                    <> Meeting Link: <a href={application.interview.meetingLink} target="_blank" rel="noreferrer" className="text-brand-600 font-semibold underline ml-1">{application.interview.meetingLink}</a></>
+                  ) : ' (No Google Meet link entered)'}
+                </span>
+              </div>
+            )}
+
+            {application.interview.interviewType === 'ai' && (
+              <a
+                href={`/ai-interview/${application.interview._id}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold transition-all shadow-xs active:scale-95"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                Preview AI Interview Room
+              </a>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         

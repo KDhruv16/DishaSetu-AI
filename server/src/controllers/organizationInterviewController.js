@@ -8,7 +8,7 @@ import { createNotification } from '../services/notificationService.js';
 // @access  Private (Organization only)
 export const scheduleInterview = async (req, res) => {
   try {
-    const { applicationId, title, type, scheduledDate, startTime, endTime, mode, meetingLink, location, instructions, timezone } = req.body;
+    const { applicationId, title, type, scheduledDate, startTime, endTime, mode, meetingLink, location, instructions, timezone, interviewType } = req.body;
 
     // Verify application exists and belongs to the organization
     const application = await Application.findOne({
@@ -60,6 +60,7 @@ export const scheduleInterview = async (req, res) => {
       endTime,
       timezone: timezone || 'UTC',
       mode,
+      interviewType: interviewType === 'ai' ? 'ai' : 'human',
       meetingLink: mode === 'online' ? meetingLink : undefined,
       location: mode === 'offline' ? location : undefined,
       instructions
@@ -180,8 +181,9 @@ export const updateInterview = async (req, res) => {
     interview.instructions = instructions !== undefined ? instructions : interview.instructions;
     interview.type = type || interview.type;
     interview.title = title || interview.title;
-    
-    // Status can optionally be reset if they confirm logic requires it, but let's just keep it simple.
+    if (req.body.interviewType && ['human', 'ai'].includes(req.body.interviewType)) {
+      interview.interviewType = req.body.interviewType;
+    }
     
     await interview.save();
 
@@ -266,6 +268,48 @@ export const submitInterviewFeedback = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Server Error submitting feedback'
+    });
+  }
+};
+
+// @desc    Set interview type (human vs ai)
+// @route   PATCH /api/organization/interviews/:id/type
+// @access  Private (Organization only)
+export const setInterviewType = async (req, res) => {
+  try {
+    const { interviewType } = req.body;
+    if (!['human', 'ai'].includes(interviewType)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid interview type. Must be "human" or "ai"'
+      });
+    }
+
+    const interview = await OrganizationInterview.findOne({
+      _id: req.params.id,
+      organization: req.user._id
+    });
+
+    if (!interview) {
+      return res.status(404).json({
+        success: false,
+        message: 'Interview not found or unauthorized'
+      });
+    }
+
+    interview.interviewType = interviewType;
+    await interview.save();
+
+    return res.status(200).json({
+      success: true,
+      data: interview,
+      message: `Interview mode switched to ${interviewType === 'ai' ? 'AI Interview' : 'Human Interview'} successfully.`
+    });
+  } catch (error) {
+    console.error('setInterviewType error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server Error updating interview type'
     });
   }
 };

@@ -77,6 +77,31 @@ const organizationInterviewSchema = new mongoose.Schema(
     },
     feedbackUpdatedAt: {
       type: Date
+    },
+    interviewType: {
+      type: String,
+      enum: ['human', 'ai'],
+      default: 'human',
+      index: true
+    },
+    aiSession: {
+      startedAt: Date,
+      completedAt: Date,
+      currentQuestionIndex: { type: Number, default: 0 },
+      persona: {
+        name: { type: String, default: 'Dr. Elena Vance' },
+        title: { type: String, default: 'AI Technical Interviewer' },
+        voice: { type: String, default: 'female-professional' }
+      },
+      questions: [
+        {
+          questionNumber: Number,
+          questionText: String,
+          askedAt: { type: Date, default: Date.now },
+          candidateResponse: String,
+          answeredAt: Date
+        }
+      ]
     }
   },
   {

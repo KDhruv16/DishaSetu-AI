@@ -18,7 +18,8 @@ import {
   getOrganizationInterviews,
   updateInterview,
   cancelInterview,
-  submitInterviewFeedback
+  submitInterviewFeedback,
+  setInterviewType
 } from '../controllers/organizationInterviewController.js';
 import {
   createOffer,
@@ -70,6 +71,9 @@ router.route('/interviews')
 
 router.route('/interviews/:id')
   .put(updateInterview);
+
+router.route('/interviews/:id/type')
+  .patch(setInterviewType);
 
 router.route('/interviews/:id/cancel')
   .patch(cancelInterview);

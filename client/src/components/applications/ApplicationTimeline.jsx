@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import {
   Check,
   Clock,
@@ -238,7 +239,15 @@ export const ApplicationTimeline = ({ application, interview, compact = false })
                         </span>
                       </div>
 
-                      {interview.meetingLink && (
+                      {interview.interviewType === 'ai' ? (
+                        <Link
+                          to={`/ai-interview/${interview._id}`}
+                          className="flex items-center gap-1.5 text-purple-700 hover:text-purple-800 font-bold underline truncate bg-purple-50 px-2 py-0.5 rounded-lg border border-purple-200"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 shrink-0 text-purple-600" />
+                          <span className="truncate">Join AI Interview</span>
+                        </Link>
+                      ) : interview.meetingLink ? (
                         <a
                           href={interview.meetingLink}
                           target="_blank"
@@ -248,7 +257,7 @@ export const ApplicationTimeline = ({ application, interview, compact = false })
                           <ExternalLink className="w-3.5 h-3.5 shrink-0" />
                           <span className="truncate">Join Video Meeting</span>
                         </a>
-                      )}
+                      ) : null}
 
                       {interview.location && (
                         <div className="flex items-center gap-1 text-slate-700">

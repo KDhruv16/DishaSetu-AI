@@ -13,9 +13,11 @@ import { OpportunitiesPage } from '../pages/OpportunitiesPage';
 import { ResumePage } from '../pages/ResumePage';
 import { InterviewPage } from '../pages/InterviewPage';
 import { CandidateInterviewsPage } from '../pages/candidate/CandidateInterviewsPage';
+import { AiInterviewRoomPage } from '../pages/AiInterviewRoomPage';
 import { CareerAssistantPage } from '../pages/CareerAssistantPage';
 import { AnalyticsPage } from '../pages/AnalyticsPage';
 import { ProtectedRoute } from '../components/common/ProtectedRoute';
+import { InterviewAuthRoute } from '../components/common/InterviewAuthRoute';
 import { AppLayout } from '../components/layout/AppLayout';
 
 // Organization Module Components & Pages
@@ -55,6 +57,11 @@ export const AppRoutes = () => {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/admin/login" element={<AdminLoginPage />} />
+
+      {/* AI Interview Room - Accessible by Authenticated Candidates and Organization Preview */}
+      <Route element={<InterviewAuthRoute />}>
+        <Route path="/ai-interview/:interviewId" element={<AiInterviewRoomPage />} />
+      </Route>
 
       {/* Candidate Protected Flow */}
       <Route element={<ProtectedRoute />}>

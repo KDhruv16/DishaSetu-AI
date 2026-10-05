@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Loader, Calendar, Video, MapPin, Phone, Building2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Loader, Calendar, Video, MapPin, Phone, Building2, Sparkles, Brain } from 'lucide-react';
 import api from '../../utils/api';
 
 export const CandidateInterviewsPage = () => {
@@ -65,12 +66,29 @@ export const CandidateInterviewsPage = () => {
                 </div>
                 <div>
                   <span className="font-semibold block text-gray-900">Mode</span>
-                  <span className="capitalize">{inv.mode}</span>
-                  {inv.mode === 'online' && inv.meetingLink && (
-                    <a href={inv.meetingLink} target="_blank" rel="noreferrer" className="block text-brand-600 font-bold hover:underline">Join Meeting</a>
+                  <div className="flex items-center gap-2">
+                    <span className="capitalize">{inv.mode}</span>
+                    {inv.interviewType === 'ai' && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-800">
+                        <Sparkles className="w-3 h-3 text-purple-600" /> AI Avatar Interview
+                      </span>
+                    )}
+                  </div>
+                  {inv.interviewType === 'ai' ? (
+                    <Link
+                      to={`/ai-interview/${inv._id}`}
+                      className="inline-flex items-center gap-1.5 mt-2 px-4 py-2 bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all active:scale-95"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      Join AI Interview
+                    </Link>
+                  ) : (
+                    inv.mode === 'online' && inv.meetingLink && (
+                      <a href={inv.meetingLink} target="_blank" rel="noreferrer" className="block text-brand-600 font-bold hover:underline mt-1">Join Meeting</a>
+                    )
                   )}
                   {inv.mode === 'offline' && inv.location && (
-                    <span className="block">{inv.location}</span>
+                    <span className="block mt-1">{inv.location}</span>
                   )}
                 </div>
               </div>
