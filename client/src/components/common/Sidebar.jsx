@@ -2,6 +2,7 @@ import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
+  BarChart3,
   Compass,
   Zap,
   Milestone,
@@ -10,10 +11,11 @@ import {
   Briefcase,
   FileText,
   MessageSquareCode,
+  CheckSquare,
   LogOut,
   Sparkles,
-  UserCheck,
-  BarChart3,
+  ShieldCheck,
+  ChevronRight
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -21,85 +23,140 @@ export const Sidebar = () => {
   const { user, profile, logout } = useAuth();
   const navigate = useNavigate();
 
-  const navItems = [
-    { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { name: 'Analytics', path: '/analytics', icon: BarChart3 },
-    { name: 'Career', path: '/career', icon: Compass },
-    { name: 'Skills', path: '/skills', icon: Zap },
-    { name: 'Roadmap', path: '/roadmap', icon: Milestone },
-    { name: 'Learning', path: '/learning', icon: BookOpen },
-    { name: 'AI Copilot', path: '/assistant', icon: Bot },
-    { name: 'Opportunities', path: '/opportunities', icon: Briefcase },
-    { name: 'Resume', path: '/resume', icon: FileText },
-    { name: 'Interview', path: '/interview', icon: MessageSquareCode },
+  const navSections = [
+    {
+      title: 'Career OS',
+      items: [
+        { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+        { name: 'Analytics', path: '/analytics', icon: BarChart3 },
+        { name: 'Career', path: '/career', icon: Compass },
+        { name: 'Skills', path: '/skills', icon: Zap },
+        { name: 'Roadmap', path: '/roadmap', icon: Milestone },
+        { name: 'Learning', path: '/learning', icon: BookOpen },
+      ]
+    },
+    {
+      title: 'Tools & Intelligence',
+      items: [
+        { name: 'AI Copilot', path: '/assistant', icon: Bot, badge: 'AI' },
+        { name: 'Resume', path: '/resume', icon: FileText },
+        { name: 'Interview', path: '/interview', icon: MessageSquareCode, badge: 'Practice' },
+      ]
+    },
+    {
+      title: 'Placement',
+      items: [
+        { name: 'Opportunities', path: '/opportunities', icon: Briefcase },
+        { name: 'Applications', path: '/applications', icon: CheckSquare },
+      ]
+    }
   ];
 
-
+  const targetRole = profile?.career?.targetRole || profile?.targetRole || 'Full Stack Dev';
 
   return (
     <>
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex flex-col w-64 bg-white border-r border-slate-200/80 h-screen sticky top-0 shrink-0 z-30">
+      <aside className="hidden lg:flex flex-col w-64 bg-white border-r border-slate-200/90 h-screen sticky top-0 shrink-0 z-30 select-none">
+        
         {/* Brand Header */}
-        <div className="p-6 border-b border-slate-100 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-brand-500/20">
-            <Sparkles className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h1 className="font-bold font-display text-slate-900 tracking-tight leading-tight">
-              DishaSetu<span className="text-brand-600">.AI</span>
-            </h1>
-            <p className="text-[11px] text-slate-400 font-medium">Campus to Career</p>
-          </div>
-        </div>
-
-        {/* Navigation Items */}
-        <div className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
-          <p className="px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
-            Navigation
-          </p>
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <NavLink
-                key={item.name}
-                to={item.path}
-                className={({ isActive }) =>
-                  `flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
-                    isActive
-                      ? 'bg-brand-50 text-brand-700 font-semibold shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                  }`
-                }
-              >
-                {({ isActive }) => (
-                  <>
-                    <Icon
-                      className={`w-5 h-5 transition-colors ${
-                        isActive ? 'text-brand-600' : 'text-slate-400 group-hover:text-slate-600'
-                      }`}
-                    />
-                    <span>{item.name}</span>
-                  </>
-                )}
-              </NavLink>
-            );
-          })}
-        </div>
-
-        {/* Bottom User Profile Section */}
-        <div className="p-4 border-t border-slate-100 bg-slate-50/50">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3 overflow-hidden">
-              <div className="w-9 h-9 rounded-xl bg-brand-100 text-brand-700 flex items-center justify-center font-bold text-sm shrink-0">
-                {user?.name?.charAt(0).toUpperCase() || 'S'}
+        <div className="h-16 px-5 border-b border-slate-100 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {/* Geometric brand mark */}
+            <div className="w-9 h-9 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-white shadow-xs">
+              <div className="relative flex items-center justify-center">
+                <span className="font-display font-extrabold text-sm text-indigo-400">DS</span>
+                <span className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full bg-emerald-400 ring-2 ring-slate-900" />
               </div>
-              <div className="truncate">
-                <p className="text-sm font-semibold text-slate-900 truncate">
-                  {user?.name || 'Student'}
+            </div>
+            <div>
+              <div className="flex items-center gap-1">
+                <span className="font-bold text-base tracking-tight text-slate-900 font-display">
+                  DishaSetu
+                </span>
+                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-200/60 uppercase tracking-wider font-mono">
+                  AI
+                </span>
+              </div>
+              <p className="text-[10px] text-slate-400 font-medium tracking-wide">
+                Campus to Career OS
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Navigation Sections */}
+        <div className="flex-1 px-3 py-4 space-y-6 overflow-y-auto divide-y divide-slate-100/80">
+          {navSections.map((section, sIdx) => (
+            <div key={section.title} className={sIdx > 0 ? 'pt-4' : ''}>
+              <div className="px-3 mb-2 flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono">
+                  {section.title}
+                </span>
+              </div>
+
+              <div className="space-y-0.5">
+                {section.items.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <NavLink
+                      key={item.name}
+                      to={item.path}
+                      className={({ isActive }) =>
+                        `group relative flex items-center justify-between px-3 py-2 rounded-lg text-[13px] font-medium transition-all ${
+                          isActive
+                            ? 'bg-slate-100 text-slate-950 font-semibold'
+                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                        }`
+                      }
+                    >
+                      {({ isActive }) => (
+                        <>
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            {/* Subtle active vertical left accent */}
+                            {isActive && (
+                              <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r bg-indigo-600" />
+                            )}
+                            <Icon
+                              className={`w-4 h-4 shrink-0 transition-colors ${
+                                isActive ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-600'
+                              }`}
+                            />
+                            <span className="truncate">{item.name}</span>
+                          </div>
+
+                          {item.badge && (
+                            <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono font-bold tracking-tight ${
+                              isActive
+                                ? 'bg-indigo-100 text-indigo-800'
+                                : 'bg-slate-100 text-slate-500 group-hover:bg-slate-200'
+                            }`}>
+                              {item.badge}
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </NavLink>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* User Profile / Status Footer */}
+        <div className="p-3 border-t border-slate-100 bg-slate-50/70">
+          <div className="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-white border border-slate-200/80 shadow-2xs">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-md bg-slate-900 text-white flex items-center justify-center font-bold text-xs shrink-0 font-display">
+                {user?.name?.charAt(0).toUpperCase() || 'D'}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold text-slate-900 truncate leading-tight">
+                  {user?.name || 'Dhruv Khatri'}
                 </p>
-                <p className="text-xs text-slate-500 truncate">
-                  {profile?.career?.targetRole || 'Full Stack Dev'}
+                <p className="text-[10px] text-slate-500 truncate leading-tight mt-0.5">
+                  {targetRole}
                 </p>
               </div>
             </div>
@@ -107,26 +164,28 @@ export const Sidebar = () => {
             <button
               onClick={logout}
               title="Sign Out"
-              className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors shrink-0"
+              aria-label="Sign out"
             >
-              <LogOut className="w-4 h-4" />
+              <LogOut className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
+
       </aside>
 
-      {/* Mobile Bottom Bar (Scrollable & Responsive) */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 py-1.5 px-2 flex items-center gap-1 overflow-x-auto shadow-lg no-scrollbar">
-        {navItems.map((item) => {
+      {/* Mobile Bottom Navigation Bar */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 py-1 px-2 flex items-center gap-1 overflow-x-auto shadow-lg no-scrollbar">
+        {navSections.flatMap(s => s.items).slice(0, 7).map((item) => {
           const Icon = item.icon;
           return (
             <NavLink
               key={item.name}
               to={item.path}
               className={({ isActive }) =>
-                `flex flex-col items-center py-1 px-2.5 rounded-xl text-[10px] font-medium transition-all shrink-0 ${
+                `flex flex-col items-center py-1 px-2.5 rounded-lg text-[10px] font-medium transition-all shrink-0 ${
                   isActive
-                    ? 'bg-brand-50 text-brand-700 font-bold shadow-2xs'
+                    ? 'text-indigo-600 font-bold bg-slate-100'
                     : 'text-slate-500 hover:text-slate-800'
                 }`
               }
@@ -137,7 +196,7 @@ export const Sidebar = () => {
           );
         })}
       </div>
-
     </>
   );
 };
+

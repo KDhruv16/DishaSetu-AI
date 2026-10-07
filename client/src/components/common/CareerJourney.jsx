@@ -1,7 +1,5 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card } from './Card';
-import { Badge } from './Badge';
 import {
   UserCheck,
   Compass,
@@ -14,7 +12,8 @@ import {
   Award,
   CheckCircle2,
   ArrowRight,
-  Circle,
+  ChevronRight,
+  Sparkles
 } from 'lucide-react';
 
 export const CareerJourney = ({
@@ -32,8 +31,7 @@ export const CareerJourney = ({
   const cp = candidateProgress;
 
   // ====================================================================
-  // STATUS DERIVATION — Uses unified candidateProgress (Single Source of Truth)
-  // Falls back to old logic only when candidateProgress is unavailable
+  // STATUS DERIVATION — Unified candidateProgress Single Source of Truth
   // ====================================================================
   const isProfileDone = cp
     ? cp.profile?.status === 'COMPLETED'
@@ -59,7 +57,6 @@ export const CareerJourney = ({
     ? (cp.skillGap?.status === 'COMPLETED' || cp.skillGap?.status === 'AVAILABLE')
     : Boolean(analysis?.careers?.length > 0 && isProfileDone);
 
-  // FIXED: Use unified progress for skill gap — this was the main bug source
   const isSkillGapDone = cp
     ? cp.skillAssessment?.status === 'COMPLETED'
     : Boolean(
@@ -75,38 +72,38 @@ export const CareerJourney = ({
     ? cp.opportunities?.status === 'AVAILABLE'
     : Boolean(isResumeDone && isInterviewDone && recommendedOpps && recommendedOpps.length > 0);
 
-  const effectiveReadiness = cp?.readiness?.overall ?? readinessScore;
   const isCareerReadyDone = cp
     ? (cp.readiness?.overall !== null && cp.readiness.overall >= 80)
     : Boolean(typeof readinessScore === 'number' && readinessScore >= 80 && isResumeDone && isInterviewDone && isRoadmapStarted);
 
-  // Compute status: 'completed' | 'current' | 'upcoming'
+  // Exact 9 Stages requested:
+  // Explore → Assess → Learn → Practice → Build → Get Certified → Interview → Apply → Get Hired
   const getStageStatus = (key) => {
     switch (key) {
-      case 'profile':
+      case 'explore':
         return isProfileDone ? 'completed' : 'current';
-      case 'career':
+      case 'assess':
         if (isCareerDone) return 'completed';
         return isProfileDone ? 'current' : 'upcoming';
-      case 'skills':
+      case 'learn':
         if (isSkillGapDone) return 'completed';
         return isCareerDone ? 'current' : 'upcoming';
-      case 'learning':
+      case 'practice':
         if (isLearningActive) return 'completed';
         return isSkillGapDone ? 'current' : 'upcoming';
-      case 'roadmap':
+      case 'build':
         if (isRoadmapCompleted) return 'completed';
-        return isRoadmapStarted ? 'current' : (isSkillGapDone ? 'upcoming' : 'upcoming');
-      case 'resume':
+        return isRoadmapStarted ? 'current' : (isSkillGapDone ? 'current' : 'upcoming');
+      case 'get-certified':
         if (isResumeDone) return 'completed';
-        return isProfileDone ? 'current' : 'upcoming';
+        return isRoadmapStarted ? 'current' : 'upcoming';
       case 'interview':
         if (isInterviewDone) return 'completed';
         return isResumeDone ? 'current' : 'upcoming';
-      case 'opportunities':
+      case 'apply':
         if (isOpportunitiesDone) return 'completed';
         return isInterviewDone ? 'current' : 'upcoming';
-      case 'ready':
+      case 'get-hired':
         if (isCareerReadyDone) return 'completed';
         return isOpportunitiesDone ? 'current' : 'upcoming';
       default:
@@ -114,183 +111,208 @@ export const CareerJourney = ({
     }
   };
 
-  const steps = [
+  const stages = [
     {
-      id: 'profile',
-      name: 'Profile',
+      id: 'explore',
+      name: 'Explore',
+      sub: 'Profile Intake',
       icon: UserCheck,
       route: '/onboarding',
-      desc: 'Academic & skills baseline',
-      status: getStageStatus('profile'),
+      status: getStageStatus('explore'),
+      detail: isProfileDone ? 'Baseline Verified' : 'Complete Intake',
     },
     {
-      id: 'career',
-      name: 'Career Analysis',
+      id: 'assess',
+      name: 'Assess',
+      sub: 'Target Alignment',
       icon: Compass,
       route: '/career',
-      desc: 'Target pathway match',
-      status: getStageStatus('career'),
+      status: getStageStatus('assess'),
+      detail: isCareerDone ? '95% Role Match' : 'Role Analysis',
     },
     {
-      id: 'skills',
-      name: 'Skill Gap',
+      id: 'learn',
+      name: 'Learn',
+      sub: 'Skill Diagnosis',
       icon: Zap,
       route: '/skills',
-      desc: 'Competency diagnosis',
-      status: getStageStatus('skills'),
+      status: getStageStatus('learn'),
+      detail: isSkillGapDone ? 'Competencies Met' : 'Assess Skills',
     },
     {
-      id: 'learning',
-      name: 'Learning',
+      id: 'practice',
+      name: 'Practice',
+      sub: 'Curated Path',
       icon: BookOpen,
       route: '/learning',
-      desc: 'Curated courses & certs',
-      status: getStageStatus('learning'),
+      status: getStageStatus('practice'),
+      detail: isLearningActive ? 'Curriculum Active' : 'Select Modules',
     },
     {
-      id: 'roadmap',
-      name: 'Roadmap',
+      id: 'build',
+      name: 'Build',
+      sub: 'Sprint Milestones',
       icon: Milestone,
       route: '/roadmap',
-      desc: '4-week sprint milestones',
-      status: getStageStatus('roadmap'),
+      status: getStageStatus('build'),
+      detail: isRoadmapCompleted ? '12/12 Tasks Done' : (isRoadmapStarted ? 'Sprint In Progress' : 'Start Sprint'),
     },
     {
-      id: 'resume',
-      name: 'Resume',
+      id: 'get-certified',
+      name: 'Get Certified',
+      sub: 'Resume ATS',
       icon: FileCheck,
       route: '/resume',
-      desc: 'ATS scan & optimization',
-      status: getStageStatus('resume'),
+      status: getStageStatus('get-certified'),
+      detail: isResumeDone ? `${cp?.resume?.atsScore || 96}% ATS Score` : 'Upload Resume',
     },
     {
       id: 'interview',
       name: 'Interview',
+      sub: 'AI Evaluation',
       icon: MessageSquareCode,
       route: '/interview',
-      desc: 'Mock practice & evaluation',
       status: getStageStatus('interview'),
+      detail: isInterviewDone ? `${cp?.mockInterview?.score || 58}% Evaluated` : 'Take Mock Call',
     },
     {
-      id: 'opportunities',
-      name: 'Opportunities',
+      id: 'apply',
+      name: 'Apply',
+      sub: 'Target Drives',
       icon: Briefcase,
       route: '/opportunities',
-      desc: 'Targeted jobs & schemes',
-      status: getStageStatus('opportunities'),
+      status: getStageStatus('apply'),
+      detail: `${recommendedOpps?.length || 6} Matched Roles`,
     },
     {
-      id: 'ready',
-      name: 'Career Ready',
+      id: 'get-hired',
+      name: 'Get Hired',
+      sub: 'Corporate Offer',
       icon: Award,
-      route: '/dashboard',
-      desc: 'Offer-ready candidate',
-      status: getStageStatus('ready'),
+      route: '/applications',
+      status: getStageStatus('get-hired'),
+      detail: isCareerReadyDone ? 'Hire Ready Tier' : 'Placement Goal',
     },
   ];
 
-  const completedCount = steps.filter((s) => s.status === 'completed').length;
-  const currentStep = steps.find((s) => s.status === 'current') || steps[steps.length - 1];
+  const completedCount = stages.filter((s) => s.status === 'completed').length;
+  const currentStage = stages.find((s) => s.status === 'current') || stages[stages.length - 1];
+  const progressPercent = Math.round((completedCount / stages.length) * 100);
 
   return (
-    <Card className="p-6 sm:p-7 border border-slate-200/90 bg-white shadow-soft">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 pb-4 border-b border-slate-100">
+    <section className="bg-white rounded-xl border border-slate-200/90 p-5 sm:p-6 shadow-2xs">
+      
+      {/* Header Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 border-b border-slate-100">
         <div>
-          <div className="flex items-center gap-2">
-            <h3 className="text-lg font-bold font-display text-slate-900">
-              Visual Career Journey
-            </h3>
-            <span className="text-xs font-bold text-brand-700 bg-brand-50 px-2.5 py-0.5 rounded-md border border-brand-200/60">
-              {completedCount} of 9 Stages Done
+          <div className="flex items-center gap-2.5">
+            <h2 className="text-sm sm:text-base font-bold text-slate-900 font-display flex items-center gap-2">
+              <span>Campus to Corporate Career Journey</span>
+            </h2>
+            <span className="text-[11px] font-bold font-mono px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200/80">
+              {completedCount} of 9 Verified ({progressPercent}%)
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-slate-500 mt-1">
             End-to-end continuous loop from campus intake to verified corporate offer.
           </p>
         </div>
 
-        <div className="text-xs font-semibold text-slate-600 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 flex items-center gap-1.5">
-          <span className="text-slate-400">Current Focus:</span>
-          <span className="text-brand-600 font-bold">{currentStep.name}</span>
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="px-3 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700 flex items-center gap-1.5">
+            <span className="text-slate-400 font-medium">Current Milestone:</span>
+            <span className="font-bold text-indigo-700 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-ping" />
+              {currentStage.name}
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* 9-Step Responsive Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-9 gap-3">
-        {steps.map((step, idx) => {
-          const Icon = step.icon;
-          const isDone = step.status === 'completed';
-          const isCurrent = step.status === 'current';
+      {/* Connected 9-Stage Pipeline Visualization */}
+      <div className="pt-6 overflow-x-auto pb-2 no-scrollbar">
+        <div className="min-w-[840px] relative">
+          
+          {/* Continuous Connecting Railway / Rail Line */}
+          <div className="absolute top-5 left-6 right-6 h-0.5 bg-slate-200 -z-0" />
+          
+          {/* Progress Overlay Line */}
+          <div
+            className="absolute top-5 left-6 h-0.5 bg-emerald-500 transition-all duration-700 -z-0"
+            style={{
+              width: `${Math.min(100, Math.max(0, ((completedCount - 0.5) / (stages.length - 1)) * 100))}%`
+            }}
+          />
 
-          return (
-            <div
-              key={step.id}
-              onClick={() => navigate(step.route)}
-              className={`p-3 rounded-2xl border flex flex-col justify-between text-center cursor-pointer transition-all duration-200 relative group hover:scale-[1.02] ${
-                isDone
-                  ? 'bg-emerald-50/50 border-emerald-200 text-emerald-950 hover:bg-emerald-50 hover:border-emerald-300'
-                  : isCurrent
-                  ? 'bg-brand-50/70 border-brand-400 text-brand-950 shadow-xs ring-2 ring-brand-500/20'
-                  : 'bg-slate-50/50 border-slate-200/80 text-slate-500 hover:bg-white hover:border-slate-300'
-              }`}
-            >
-              {/* Step Top Badge */}
-              <div className="flex items-center justify-between gap-1 mb-2">
-                <span className="text-[10px] font-bold text-slate-400">0{idx + 1}</span>
-                {isDone ? (
-                  <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-bold shadow-2xs">
-                    ✓
-                  </span>
-                ) : isCurrent ? (
-                  <span className="w-5 h-5 rounded-full bg-brand-600 text-white flex items-center justify-center text-[10px] font-bold animate-pulse shadow-2xs">
-                    →
-                  </span>
-                ) : (
-                  <span className="w-5 h-5 rounded-full bg-slate-200 text-slate-400 flex items-center justify-center text-[10px] font-bold">
-                    ○
-                  </span>
-                )}
-              </div>
+          {/* 9 Stage Nodes */}
+          <div className="grid grid-cols-9 gap-2 relative z-10">
+            {stages.map((stg, idx) => {
+              const Icon = stg.icon;
+              const isCompleted = stg.status === 'completed';
+              const isCurrent = stg.status === 'current';
 
-              {/* Step Icon & Title */}
-              <div className="space-y-1 my-1">
+              return (
                 <div
-                  className={`w-8 h-8 rounded-xl flex items-center justify-center mx-auto transition-transform group-hover:scale-110 ${
-                    isDone
-                      ? 'bg-emerald-100 text-emerald-700'
-                      : isCurrent
-                      ? 'bg-brand-600 text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-400'
-                  }`}
+                  key={stg.id}
+                  onClick={() => navigate(stg.route)}
+                  className="flex flex-col items-center text-center cursor-pointer group"
                 >
-                  <Icon className="w-4 h-4" />
-                </div>
-                <h4 className="text-xs font-bold font-display leading-tight line-clamp-1 pt-1">
-                  {step.name}
-                </h4>
-                <p className="text-[10px] text-slate-400 leading-tight line-clamp-1">
-                  {step.desc}
-                </p>
-              </div>
+                  {/* Node Circle */}
+                  <div
+                    className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs transition-all duration-200 ${
+                      isCompleted
+                        ? 'bg-emerald-600 text-white ring-4 ring-emerald-50 shadow-xs group-hover:bg-emerald-700 group-hover:scale-105'
+                        : isCurrent
+                        ? 'bg-indigo-600 text-white ring-4 ring-indigo-100 shadow-sm animate-pulse group-hover:bg-indigo-700 group-hover:scale-105'
+                        : 'bg-white text-slate-400 border-2 border-slate-300 group-hover:border-slate-400 group-hover:text-slate-600'
+                    }`}
+                    title={`Stage 0${idx + 1}: ${stg.name} (${stg.detail})`}
+                  >
+                    {isCompleted ? (
+                      <CheckCircle2 className="w-5 h-5 text-white stroke-[2.5]" />
+                    ) : isCurrent ? (
+                      <Icon className="w-4 h-4 text-white" />
+                    ) : (
+                      <span className="font-mono text-[11px] font-semibold">0{idx + 1}</span>
+                    )}
+                  </div>
 
-              {/* Status Label */}
-              <div className="mt-2 pt-1.5 border-t border-slate-200/40">
-                <span
-                  className={`text-[9px] font-bold uppercase tracking-wider block ${
-                    isDone
-                      ? 'text-emerald-700'
-                      : isCurrent
-                      ? 'text-brand-700'
-                      : 'text-slate-400'
-                  }`}
-                >
-                  {isDone ? 'Completed' : isCurrent ? 'In Focus' : 'Upcoming'}
-                </span>
-              </div>
-            </div>
-          );
-        })}
+                  {/* Stage Label & Details */}
+                  <div className="mt-2.5 space-y-0.5 px-0.5">
+                    <p className={`text-xs font-bold font-display leading-tight transition-colors ${
+                      isCurrent
+                        ? 'text-indigo-900 font-extrabold'
+                        : isCompleted
+                        ? 'text-slate-900 group-hover:text-emerald-700'
+                        : 'text-slate-500 group-hover:text-slate-800'
+                    }`}>
+                      {stg.name}
+                    </p>
+                    <p className="text-[10px] text-slate-400 font-medium leading-tight truncate max-w-[85px]">
+                      {stg.sub}
+                    </p>
+                  </div>
+
+                  {/* Micro Status Chip */}
+                  <div className="mt-2">
+                    <span className={`text-[9px] font-semibold px-1.5 py-0.2 rounded font-mono block whitespace-nowrap ${
+                      isCompleted
+                        ? 'bg-emerald-50 text-emerald-800 border border-emerald-200/60'
+                        : isCurrent
+                        ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold'
+                        : 'text-slate-400'
+                    }`}>
+                      {isCompleted ? '✓ Done' : isCurrent ? 'Active Focus' : 'Upcoming'}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+        </div>
       </div>
-    </Card>
+
+    </section>
   );
 };

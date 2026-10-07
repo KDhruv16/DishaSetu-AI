@@ -80,6 +80,7 @@ export const AppRoutes = () => {
           <Route path="/resume" element={<ResumePage />} />
           <Route path="/interview" element={<InterviewPage />} />
           <Route path="/recruitment-interviews" element={<CandidateInterviewsPage />} />
+          <Route path="/applications" element={<CandidateInterviewsPage />} />
         </Route>
       </Route>
 

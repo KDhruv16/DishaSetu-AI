@@ -89,6 +89,8 @@ export const AiInterviewRoomPage = () => {
   const [isWaitingForCandidate, setIsWaitingForCandidate] = useState(false);
   const [recordedAnswers, setRecordedAnswers] = useState([]);
   const [currentAnswer, setCurrentAnswer] = useState('');
+  const [finalTranscript, setFinalTranscript] = useState('');
+  const [interimTranscript, setInterimTranscript] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [showCaptions, setShowCaptions] = useState(true);
@@ -246,9 +248,12 @@ export const AiInterviewRoomPage = () => {
     if (interviewComplete || isVideoPlaying || isThinking || isMicMuted) return;
 
     audioRecognitionService.startListening({
-      initialText: currentAnswer,
-      onTranscript: ({ currentSpokenText }) => {
-        setCurrentAnswer(currentSpokenText);
+      initialText: finalTranscript || currentAnswer,
+      onTranscript: ({ displayedTranscript, finalTranscript: fText, interimTranscript: iText, currentSpokenText }) => {
+        const textToDisplay = displayedTranscript || currentSpokenText || '';
+        setCurrentAnswer(textToDisplay);
+        if (fText !== undefined) setFinalTranscript(fText);
+        if (iText !== undefined) setInterimTranscript(iText);
       },
       onError: (err) => {
         console.warn('[AI Interview Room] Speech recognition notice:', err);
@@ -290,6 +295,8 @@ export const AiInterviewRoomPage = () => {
    */
   const handleClearAnswer = () => {
     setCurrentAnswer('');
+    setFinalTranscript('');
+    setInterimTranscript('');
     audioRecognitionService.clearTranscript();
   };
 
@@ -314,7 +321,13 @@ export const AiInterviewRoomPage = () => {
       stopListeningCandidate();
       setIsThinking(true);
 
-      const candidateSpokenText = currentAnswer.trim();
+      // Send ONLY the final cleaned transcript without duplicated interim text
+      const cleanServiceFinal = audioRecognitionService.getFinalTranscript();
+      const candidateSpokenText = (
+        cleanServiceFinal ||
+        finalTranscript.trim() ||
+        currentAnswer.trim()
+      );
 
       // Record answer locally
       const updatedAnswers = [
@@ -344,6 +357,8 @@ export const AiInterviewRoomPage = () => {
 
       // Reset candidate answer box for next question
       setCurrentAnswer('');
+      setFinalTranscript('');
+      setInterimTranscript('');
       audioRecognitionService.clearTranscript();
 
       // Check whether another video exists in the configurable sequence
@@ -637,8 +652,11 @@ export const AiInterviewRoomPage = () => {
                   <textarea
                     value={currentAnswer}
                     onChange={(e) => {
-                      setCurrentAnswer(e.target.value);
-                      audioRecognitionService.setTranscript(e.target.value);
+                      const val = e.target.value;
+                      setCurrentAnswer(val);
+                      setFinalTranscript(val);
+                      setInterimTranscript('');
+                      audioRecognitionService.setTranscript(val);
                     }}
                     placeholder={
                       isVideoPlaying

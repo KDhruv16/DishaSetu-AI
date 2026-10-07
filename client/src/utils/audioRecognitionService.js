@@ -11,7 +11,9 @@ class AudioRecognitionService {
     this.recognition = null;
     this.isListening = false;
     this.restartTimeout = null;
-    this.accumulatedTranscript = '';
+    this.finalTranscript = '';
+    this.interimTranscript = '';
+    this.lastProcessedIndex = -1;
     this.callbacks = {
       onTranscript: null,
       onError: null,
@@ -26,12 +28,45 @@ class AudioRecognitionService {
     this.volumeAnimationId = null;
   }
 
+  // Backwards compatibility getter/setter for legacy references
+  get accumulatedTranscript() {
+    return this.finalTranscript;
+  }
+  set accumulatedTranscript(val) {
+    this.finalTranscript = val || '';
+  }
+
   /**
    * Check if browser supports Web Speech API
    */
   isSupported() {
     if (typeof window === 'undefined') return false;
     return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  }
+
+  /**
+   * Retrieve current displayed transcript: final + interim
+   */
+  getDisplayedTranscript() {
+    const cleanFinal = (this.finalTranscript || '').trim();
+    const cleanInterim = (this.interimTranscript || '').trim();
+    return cleanFinal && cleanInterim
+      ? `${cleanFinal} ${cleanInterim}`
+      : (cleanFinal || cleanInterim || '');
+  }
+
+  /**
+   * Retrieve current cleaned final transcript (persisted across restarts)
+   */
+  getFinalTranscript() {
+    return (this.finalTranscript || '').trim();
+  }
+
+  /**
+   * Retrieve current interim transcript
+   */
+  getInterimTranscript() {
+    return (this.interimTranscript || '').trim();
   }
 
   /**
@@ -50,6 +85,11 @@ class AudioRecognitionService {
     instance.maxAlternatives = 1;
     instance.lang = (typeof navigator !== 'undefined' && navigator.language) ? navigator.language : 'en-US';
 
+    // A fresh recognition instance starts its result-list indexing from 0.
+    // Reset session-scoped index tracking and interim buffer.
+    this.lastProcessedIndex = -1;
+    this.interimTranscript = '';
+
     instance.onstart = () => {
       if (this.callbacks.onStateChange) {
         this.callbacks.onStateChange({ status: 'listening', isListening: true });
@@ -57,38 +97,65 @@ class AudioRecognitionService {
     };
 
     instance.onresult = (event) => {
-      let sessionFinal = '';
-      let sessionInterim = '';
+      if (!event.results) return;
 
-      for (let i = 0; i < event.results.length; ++i) {
-        const res = event.results[i];
-        const text = res[0]?.transcript || '';
-        if (res.isFinal) {
-          sessionFinal += (sessionFinal ? ' ' : '') + text.trim();
-        } else {
-          sessionInterim += (sessionInterim ? ' ' : '') + text.trim();
+      const newFinalChunks = [];
+
+      // 1. Process ONLY newly finalized results starting from event.resultIndex
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        const result = event.results[i];
+        if (!result || !result[0]) continue;
+
+        if (result.isFinal) {
+          // Never append the same final result index twice within this recognition session
+          if (i > this.lastProcessedIndex) {
+            this.lastProcessedIndex = i;
+            const text = result[0].transcript ? result[0].transcript.trim() : '';
+            if (text) {
+              newFinalChunks.push(text);
+            }
+          }
         }
       }
 
-      // Combine previous accumulated transcript with current session text
-      const parts = [];
-      if (this.accumulatedTranscript) parts.push(this.accumulatedTranscript);
-      if (sessionFinal) parts.push(sessionFinal);
-      if (sessionInterim) parts.push(sessionInterim);
-
-      const currentSpokenText = parts.join(' ').trim();
-
-      if (this.callbacks.onTranscript) {
-        this.callbacks.onTranscript({
-          currentSpokenText,
-          interim: sessionInterim,
-          finalText: [this.accumulatedTranscript, sessionFinal].filter(Boolean).join(' ').trim()
-        });
+      // 2. Only append NEW finalized speech to the persistent final transcript
+      if (newFinalChunks.length > 0) {
+        const addedFinal = newFinalChunks.join(' ');
+        this.finalTranscript = this.finalTranscript
+          ? `${this.finalTranscript} ${addedFinal}`
+          : addedFinal;
       }
 
-      // If we got finalized text in this session, save it into accumulatedTranscript
-      if (sessionFinal && event.results[event.results.length - 1]?.isFinal) {
-        this.accumulatedTranscript = [this.accumulatedTranscript, sessionFinal].filter(Boolean).join(' ').trim();
+      // 3. Rebuild the current interim transcript freshly from non-final results in this event
+      let currentInterim = '';
+      for (let i = 0; i < event.results.length; ++i) {
+        const result = event.results[i];
+        if (result && result[0] && !result.isFinal) {
+          const text = result[0].transcript ? result[0].transcript.trim() : '';
+          if (text) {
+            currentInterim += (currentInterim ? ' ' : '') + text;
+          }
+        }
+      }
+      this.interimTranscript = currentInterim;
+
+      // 4. Construct clean displayed transcript = finalTranscript + interimTranscript
+      const cleanFinal = (this.finalTranscript || '').trim();
+      const cleanInterim = (this.interimTranscript || '').trim();
+      const displayedTranscript = cleanFinal && cleanInterim
+        ? `${cleanFinal} ${cleanInterim}`
+        : (cleanFinal || cleanInterim || '');
+
+      // 5. Notify listeners with separated and combined fields
+      if (this.callbacks.onTranscript) {
+        this.callbacks.onTranscript({
+          displayedTranscript,
+          currentSpokenText: displayedTranscript,
+          finalTranscript: cleanFinal,
+          finalText: cleanFinal,
+          interimTranscript: cleanInterim,
+          interim: cleanInterim
+        });
       }
     };
 
@@ -133,6 +200,9 @@ class AudioRecognitionService {
     };
 
     instance.onend = () => {
+      // Clear interim transcript on session boundary to avoid ghost interim speech
+      this.interimTranscript = '';
+
       // If we are still marked as active listening, restart with a small debounce to prevent InvalidStateError
       if (this.isListening) {
         if (this.callbacks.onStateChange) {
@@ -186,9 +256,11 @@ class AudioRecognitionService {
     this.callbacks.onError = onError;
     this.callbacks.onStateChange = onStateChange;
 
-    if (initialText) {
-      this.accumulatedTranscript = initialText.trim();
+    if (initialText !== undefined && initialText !== null) {
+      this.finalTranscript = initialText.trim();
     }
+    this.interimTranscript = '';
+    this.lastProcessedIndex = -1;
 
     if (this.isListening) {
       return;
@@ -228,23 +300,60 @@ class AudioRecognitionService {
       }
     }
 
+    this.interimTranscript = '';
+
     if (this.callbacks.onStateChange) {
       this.callbacks.onStateChange({ status: 'idle', isListening: false });
     }
   }
 
   /**
-   * Reset the transcript buffer
+   * Reset the transcript buffer and cleanly restart if recognition is active
    */
   clearTranscript() {
-    this.accumulatedTranscript = '';
+    this.finalTranscript = '';
+    this.interimTranscript = '';
+    this.lastProcessedIndex = -1;
+
+    if (this.callbacks.onTranscript) {
+      this.callbacks.onTranscript({
+        displayedTranscript: '',
+        currentSpokenText: '',
+        finalTranscript: '',
+        finalText: '',
+        interimTranscript: '',
+        interim: ''
+      });
+    }
+
+    if (this.isListening) {
+      clearTimeout(this.restartTimeout);
+      if (this.recognition) {
+        try {
+          this.recognition.abort();
+        } catch (_) {}
+      }
+      this.restartTimeout = setTimeout(() => {
+        if (!this.isListening) return;
+        try {
+          this.recognition = this._createRecognition();
+          if (this.recognition) {
+            this.recognition.start();
+          }
+        } catch (err) {
+          console.warn('[AudioRecognitionService] Restart on clear warning:', err.message);
+        }
+      }, 100);
+    }
   }
 
   /**
    * Set or update base transcript manually (e.g. if user types in correction)
    */
   setTranscript(text = '') {
-    this.accumulatedTranscript = text.trim();
+    this.finalTranscript = (text || '').trim();
+    this.interimTranscript = '';
+    this.lastProcessedIndex = -1;
   }
 
   /**
